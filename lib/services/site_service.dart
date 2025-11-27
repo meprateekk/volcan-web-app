@@ -1,19 +1,31 @@
 import 'package:visionvolcan_site_app/main.dart';
 
+/// Manages all operations related to construction sites in the application
 class SiteService {
+  // Private constructor for singleton pattern
   SiteService._();
+  
+  // Single instance of SiteService
   static final SiteService instance = SiteService._();
 
-  // Get all sites from Supabase
+  /// Retrieves a list of all construction sites from the database
   Future<List<Map<String, dynamic>>> getSites() async {
     final response = await supabase
-        .from('sites') // The name of your table
-        .select(); // "Get all columns"
+        .from('sites')
+        .select();
     return List<Map<String, dynamic>>.from(response as List);
   }
 
-  // Update a specific field of a site in Supabase
-  Future<void> updateSiteField(Map<String, dynamic> siteToUpdate, String fieldKey, dynamic newValue) async {
+  /// Updates a specific field of a site
+  /// 
+  /// [siteToUpdate] The site map containing at least the 'id' field
+  /// [fieldKey] The name of the field to update
+  /// [newValue] The new value to set for the field
+  Future<void> updateSiteField(
+    Map<String, dynamic> siteToUpdate, 
+    String fieldKey, 
+    dynamic newValue
+  ) async {
     if (siteToUpdate['id'] != null) {
       await supabase
           .from('sites')
@@ -22,14 +34,18 @@ class SiteService {
     }
   }
 
-  // Add a new site to Supabase
+  /// Creates a new construction site in the database
+  /// 
+  /// [newSite] A map containing the site details (name, location, etc.)
   Future<void> addSite(Map<String, dynamic> newSite) async {
     await supabase
         .from('sites')
         .insert(newSite);
   }
 
-  // Delete a site from Supabase
+  /// Permanently removes a site from the database
+  /// 
+  /// [siteToDelete] The site map containing at least the 'id' field
   Future<void> deleteSite(Map<String, dynamic> siteToDelete) async {
     if (siteToDelete['id'] != null) {
       await supabase
@@ -39,7 +55,9 @@ class SiteService {
     }
   }
 
-  // Mark a site as completed in Supabase
+  /// Marks a site as completed in the system
+  /// 
+  /// [siteToUpdate] The site map containing at least the 'id' field
   Future<void> markSiteAsCompleted(Map<String, dynamic> siteToUpdate) async {
     if (siteToUpdate['id'] != null) {
       await supabase

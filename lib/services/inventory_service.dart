@@ -4,104 +4,93 @@ class InventoryService {
   InventoryService._();
   static final InventoryService instance = InventoryService._();
 
-  // Get stock items for a specific site
+  // =======================================================
+  // 📈 NEW FUNCTIONS FOR THE "INVENTORY" SCREEN
+  // =======================================================
+
+  // NEW: Gets all purchases from the 'raw_material_purchases' table
+  // This is used by InventoryScreen to calculate "Total Bought".
+  Future<List<Map<String, dynamic>>> getAllPurchases(int siteId) async {
+    final response = await supabase
+        .from('raw_material_purchases')
+        .select()
+        .eq('site_id', siteId);
+    return List<Map<String, dynamic>>.from(response as List);
+  }
+
+  // NEW: Gets all consumed logs from the 'material_consumed' table
+  // This is used by InventoryScreen to calculate "Total Used".
+  Future<List<Map<String, dynamic>>> getAllConsumed(int siteId) async {
+    final response = await supabase
+        .from('material_consumed')
+        .select()
+        .eq('site_id', siteId);
+    return List<Map<String, dynamic>>.from(response as List);
+  }
+
+  // NEW: Adds a new "usage" log to the 'material_consumed' table
+  // This is called when you press the "+" button on the "Consumed" tab.
+  Future<void> logMaterialUsage(Map<String, dynamic> item) async {
+    await supabase.from('material_consumed').insert(item);
+  }
+
+  // NEW: Deletes a "usage" log from the 'material_consumed' table
+  // This is called when you press the delete button on the "Consumed" tab.
+  Future<void> deleteConsumedLog(String id) async {
+    await supabase
+        .from('material_consumed')
+        .delete()
+        .eq('id', id);
+  }
+
+
+  // =======================================================
+  // 🗑️ OLD, DEPRECATED FUNCTIONS
+  // We no longer use these, but we'll keep them here for now.
+  // =======================================================
+
   Future<List<Map<String, dynamic>>> getStockForSite(int siteId) async {
-    final response = await supabase
-        .from('inventory_stock')
-        .select()
-        .eq('site_id', siteId);
-    return List<Map<String, dynamic>>.from(response as List);
+    // This function is no longer used.
+    // The 'inventory_stock' table is no longer used.
+    return [];
   }
 
-  // Get used items for a specific site
-  Future<List<Map<String, dynamic>>> getUsedItemsForSite(int siteId) async {
-    final response = await supabase
-        .from('inventory_used')
-        .select()
-        .eq('site_id', siteId);
-    return List<Map<String, dynamic>>.from(response as List);
-  }
-
-  // Add new stock item
   Future<void> addStockItem(Map<String, dynamic> item) async {
-    await supabase.from('inventory_stock').insert(item);
+    // This function is no longer used.
   }
 
-  // Update stock item
   Future<void> updateStockItem(String id, Map<String, dynamic> updatedItem) async {
-    await supabase
-        .from('inventory_stock')
-        .update(updatedItem)
-        .eq('id', id);
+    // This function is no longer used.
   }
 
-  // Delete stock item
   Future<void> deleteStockItem(String id) async {
-    await supabase
-        .from('inventory_stock')
-        .delete()
-        .eq('id', id);
+    // This function is no longer used.
   }
 
-  // Add used item (when material is consumed)
+  Future<List<Map<String, dynamic>>> getUsedItemsForSite(int siteId) async {
+    // This function is no longer used.
+    // The 'inventory_used' table is no longer used.
+    return [];
+  }
+
   Future<void> addUsedItem(Map<String, dynamic> item) async {
-    await supabase.from('inventory_used').insert(item);
+    // This function is no longer used.
   }
 
-  // Update used item
+
   Future<void> updateUsedItem(String id, Map<String, dynamic> updatedItem) async {
-    await supabase
-        .from('inventory_used')
-        .update(updatedItem)
-        .eq('id', id);
+    // This function is no longer used.
   }
 
-  // Delete used item
   Future<void> deleteUsedItem(String id) async {
-    await supabase
-        .from('inventory_used')
-        .delete()
-        .eq('id', id);
+    // This function is no longer used.
   }
 
-  // Use stock (reduces stock quantity and logs usage)
   Future<void> useStockItem({
-    required int siteId,
-    required String materialName,
+    required Map<String, dynamic> stockItem,
     required int quantityUsed,
     required String date,
   }) async {
-    // 1. Find the stock item
-    final stockItems = await supabase
-        .from('inventory_stock')
-        .select()
-        .eq('site_id', siteId)
-        .eq('material', materialName);
-
-    if (stockItems.isNotEmpty) {
-      final stockItem = stockItems.first;
-      final currentQty = stockItem['quantity'] as int;
-      final newQty = currentQty - quantityUsed;
-
-      // 2. Update stock quantity
-      await supabase
-          .from('inventory_stock')
-          .update({'quantity': newQty})
-          .eq('id', stockItem['id']);
-
-      // 3. Log the usage
-      await supabase.from('inventory_used').insert({
-        'site_id': siteId,
-        'sector': stockItem['sector'],
-        'material': materialName,
-        'quantity': quantityUsed,
-        'unit': stockItem['unit'],
-        'used_date': date,
-      });
-
-      print('Inventory Updated: Used $quantityUsed of $materialName');
-    } else {
-      print('Warning: $materialName not found in stock');
-    }
+    // This function is no longer used.
   }
 }
