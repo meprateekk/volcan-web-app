@@ -565,23 +565,25 @@ class _InventoryScreenState extends State<InventoryScreen> {
       );
     }
 
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          columns: _showStock
-              ? _getStockColumns()
-              : _getConsumedColumns(),
+    return Center(
+      child: Card(
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: DataTable(
+            columns: _showStock
+                ? _getStockColumns()
+                : _getConsumedColumns(),
 
-          rows: _filteredItems.map((item) {
-            if (_showStock) {
-              return _buildStockRow(item);
-            } else {
-              return _buildConsumedRow(item);
-            }
-          }).toList(),
+            rows: _filteredItems.map((item) {
+              if (_showStock) {
+                return _buildStockRow(item);
+              } else {
+                return _buildConsumedRow(item);
+              }
+            }).toList(),
+          ),
         ),
       ),
     );

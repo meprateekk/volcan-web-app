@@ -577,7 +577,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                 TextField(
                   controller: _paidAmountController,
                   decoration:  const InputDecoration(
-                    labelText: 'Amount Paid',
+                    labelText: 'Advance',
                     prefixIcon: Text('₹ ', style: TextStyle(fontSize: 18, color: Colors.black87)),
                   ),
                   keyboardType: TextInputType.number,

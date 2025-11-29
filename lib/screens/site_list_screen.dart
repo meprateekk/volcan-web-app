@@ -80,7 +80,7 @@ class _SiteListScreenState extends State<SiteListScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Palette.primaryBlue,
-        title: const Text("Select a Site"),
+        title: const Text("Dashboard"),
         foregroundColor: Palette.white,
         shape: const ContinuousRectangleBorder(
           borderRadius: BorderRadius.only(
@@ -551,138 +551,217 @@ class _SiteListScreenState extends State<SiteListScreen> {
             backgroundColor: Palette.primaryBlue,
             foregroundColor: Palette.white,
           ),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
-            // We replace the old Column with the new, real terms
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Volcan Vision And Automation Private Limited – Terms & Conditions',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 16),
-
-                _buildTermSection(
-                    '1. Introduction',
-                    'Welcome to the Volcan Vision Client Supply Chain Management App (“App”).\n'
-                        'This App is developed and owned by Volcan Vision and Automation Pvt. Ltd. (“Company”, “We”, “Our”, “Us”).\n\n'
-                        'By using this App, you (“Client”, “User”) agree to these Terms & Conditions (“Terms”).\n'
-                        'If you do not agree, please stop using the App immediately.'
-                ),
-                _buildTermSection(
-                    '2. Restricted Use & Eligibility',
-                    '• This App is exclusively created for a specific client of Volcan Vision and is not for public use.\n'
-                        '• Only users authorized by the Client are permitted to access and operate the App.\n'
-                        '• The Client is fully responsible for managing authorized users and preventing unauthorized access.'
-                ),
-                _buildTermSection(
-                    '3. Account Access & Security',
-                    '• Users must provide accurate information during account creation or onboarding.\n'
-                        '• The Client must ensure that login credentials are kept confidential.\n'
-                        '• The Company may suspend or terminate access if misuse, unauthorized activity, or security concerns are detected.'
-                ),
-                _buildTermSection(
-                    '4. Intellectual Property Rights',
-                    'All elements of the App—including software code, architecture, UI/UX, workflows, designs, and content—are the sole intellectual property of Volcan Vision and Automation Pvt. Ltd.\n\n'
-                        'The Client is granted a limited, non-exclusive, non-transferable license to use the App for internal business operations only.\n'
-                        'The Client must not:\n'
-                        '  - Copy, modify, or redistribute the App\n'
-                        '  - Reverse engineer or attempt to extract the underlying source code\n'
-                        '  - Create derivative or competing products\n'
-                        '  - Share the App or its components with third parties\n\n'
-                        'All rights not expressly granted remain with the Company.'
-                ),
-                _buildTermSection(
-                    '5. Data Policy & Privacy',
-                    'The App may collect and store data necessary for the Client’s internal operations, including:\n\n'
-                        '• Order, production, inventory, supply chain, and expense data\n'
-                        '• Basic user information\n'
-                        '• Uploaded documents or files\n'
-                        '• Technical logs and usage metadata\n\n'
-                        'Data Ownership\n'
-                        '• All operational data belongs to the Client.\n'
-                        '• The Company may only access data for:\n'
-                        '  - Technical support\n'
-                        '  - Bug fixing\n'
-                        '  - Maintenance\n'
-                        '  - Feature enhancements requested by the Client\n\n'
-                        'Data Protection\n'
-                        '• Data is handled and stored following industry-standard security practices.\n'
-                        '• Data is never sold or shared with third parties except as required by law.\n\n'
-                        'Any pre-existing NDA or Data Processing Agreement between the Client and the Company takes precedence over these Terms.'
-                ),
-                _buildTermSection(
-                    '6. Third-Party Services',
-                    'The App may rely on third-party platforms essential for its functionality, including but not limited to Supabase, Firebase, GitHub.\n\n'
-                        'These services operate under their own terms and privacy policies.\n'
-                        'The Company is not liable for:\n'
-                        '• Downtime or disruptions caused by third-party providers\n'
-                        '• Data loss or performance issues due to external service outages\n'
-                        '• Policy or technical changes introduced by these service providers\n\n'
-                        'The Client acknowledges that the App depends partially on the availability and performance of these third-party systems.'
-                ),
-                _buildTermSection(
-                    '7. Software Updates',
-                    '• All updates, patches, and enhancements will be planned, discussed, and coordinated directly with the Client.\n'
-                        '• Updates may include improvements, bug fixes, or new modules.\n'
-                        '• No unannounced automatic updates will be pushed unless explicitly agreed.'
-                ),
-                _buildTermSection(
-                    '8. Prohibited Use',
-                    'The Client and authorized users must not:\n\n'
-                        '• Use the App for illegal or unauthorized purposes\n'
-                        '• Attempt to bypass, hack, or exploit the App’s security systems\n'
-                        '• Conduct penetration testing without the Company’s written approval\n'
-                        '• Share internal business data externally without authorization\n'
-                        '• Upload malicious files or engage in harmful activities\n'
-                        '• Use the App beyond the operational scope agreed with the Company\n\n'
-                        'Misuse may result in immediate suspension or termination of access.'
-                ),
-                _buildTermSection(
-                    '9. Warranty Disclaimer',
-                    'The App is provided on an “as-is” and “as-available” basis.\n\n'
-                        'The Company does not guarantee:\n'
-                        '• Uninterrupted access\n'
-                        '• Error-free performance\n'
-                        '• Compatibility with third-party hardware or software not approved by the Company\n'
-                        '• Accuracy of data entered by the Client’s users\n\n'
-                        'The Company is not responsible for operational decisions made based on the data provided through the App.'
-                ),
-                _buildTermSection(
-                    '10. Limitation of Liability',
-                    'To the maximum extent permitted by law, the Company is not liable for:\n\n'
-                        '• Financial losses or business disruptions\n'
-                        '• Supply chain delays or production issues\n'
-                        '• Incorrect entries or data provided by users\n'
-                        '• Data loss caused by third-party services\n'
-                        '• Any indirect, incidental, or consequential damages\n\n'
-                        'The Client is solely responsible for validating decisions based on the App’s information.'
-                ),
-                _buildTermSection(
-                    '11. Termination',
-                    'The Company may suspend or terminate App access under the following circumstances:\n\n'
-                        '• Violation of these Terms\n'
-                        '• Unauthorized access attempts\n'
-                        '• Security threats\n'
-                        '• Expiry or termination of the service agreement\n\n'
-                        'The Client may request account deletion or data removal at any time.'
-                ),
-                _buildTermSection(
-                    '12. Governing Law',
-                    'These Terms shall be governed by and interpreted according to the laws of Gurgaon, Haryana, India.\n'
-                        'Any disputes shall fall under the exclusive jurisdiction of courts located in Gurgaon, Haryana.'
-                ),
-                _buildTermSection(
-                    '13. Contact Information',
-                    'For all inquiries, support needs, or legal communications:\n\n'
-                        'Volcan Vision and Automation Pvt. Ltd.\n'
-                        'Email: info@volcanvision.com\n'
-                        'Website: www.volcanvision.com'
-                ),
-              ],
+          body: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.white,
+                  Colors.grey[50]!,
+                ],
+              ),
             ),
-          ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isWeb = constraints.maxWidth > 600;
+                final padding = isWeb ? 32.0 : 16.0;
+                final cardPadding = isWeb ? 24.0 : 16.0;
+                final titleFontSize = isWeb ? 22.0 : 20.0;
+
+                return SingleChildScrollView(
+                  padding: EdgeInsets.all(padding),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: isWeb ? constraints.maxWidth * 0.8 : double
+                            .infinity,
+                        padding: EdgeInsets.all(cardPadding),
+                        decoration: BoxDecoration(
+                          color: Palette.primaryBlue,
+                          borderRadius: BorderRadius.circular(16.0),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Palette.primaryBlue.withOpacity(0.3),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            const Icon(
+                              Icons.description,
+                              size: 48,
+                              color: Palette.white,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Volcan Vision And Automation\nPrivate Limited',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: isWeb ? 18.0 : 16.0,
+                                fontWeight: FontWeight.bold,
+                                color: Palette.white,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Terms & Conditions',
+                              style: TextStyle(
+                                fontSize: titleFontSize,
+                                fontWeight: FontWeight.bold,
+                                color: Palette.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      _buildTermSection(
+                          '1. Introduction',
+                          'Welcome to the Volcan Vision Client Supply Chain Management App (“App”).\n'
+                              'This App is developed and owned by Volcan Vision and Automation Pvt. Ltd. (“Company”, “We”, “Our”, “Us”).\n\n'
+                              'By using this App, you (“Client”, “User”) agree to these Terms & Conditions (“Terms”).\n'
+                              'If you do not agree, please stop using the App immediately.'
+                      ),
+                      _buildTermSection(
+                          '2. Restricted Use & Eligibility',
+                          '• This App is exclusively created for a specific client of Volcan Vision and is not for public use.\n'
+                              '• Only users authorized by the Client are permitted to access and operate the App.\n'
+                              '• The Client is fully responsible for managing authorized users and preventing unauthorized access.'
+                      ),
+                      _buildTermSection(
+                          '3. Account Access & Security',
+                          '• Users must provide accurate information during account creation or onboarding.\n'
+                              '• The Client must ensure that login credentials are kept confidential.\n'
+                              '• The Company may suspend or terminate access if misuse, unauthorized activity, or security concerns are detected.'
+                      ),
+                      _buildTermSection(
+                          '4. Intellectual Property Rights',
+                          'All elements of the App—including software code, architecture, UI/UX, workflows, designs, and content—are the sole intellectual property of Volcan Vision and Automation Pvt. Ltd.\n\n'
+                              'The Client is granted a limited, non-exclusive, non-transferable license to use the App for internal business operations only.\n'
+                              'The Client must not:\n'
+                              '  - Copy, modify, or redistribute the App\n'
+                              '  - Reverse engineer or attempt to extract the underlying source code\n'
+                              '  - Create derivative or competing products\n'
+                              '  - Share the App or its components with third parties\n\n'
+                              'All rights not expressly granted remain with the Company.'
+                      ),
+                      _buildTermSection(
+                          '5. Data Policy & Privacy',
+                          'The App may collect and store data necessary for the Client’s internal operations, including:\n\n'
+                              '• Order, production, inventory, supply chain, and expense data\n'
+                              '• Basic user information\n'
+                              '• Uploaded documents or files\n'
+                              '• Technical logs and usage metadata\n\n'
+                              'Data Ownership\n'
+                              '• All operational data belongs to the Client.\n'
+                              '• The Company may only access data for:\n'
+                              '  - Technical support\n'
+                              '  - Bug fixing\n'
+                              '  - Maintenance\n'
+                              '  - Feature enhancements requested by the Client\n\n'
+                              'Data Protection\n'
+                              '• Data is handled and stored following industry-standard security practices.\n'
+                              '• Data is never sold or shared with third parties except as required by law.\n\n'
+                              'Any pre-existing NDA or Data Processing Agreement between the Client and the Company takes precedence over these Terms.'
+                      ),
+                      _buildTermSection(
+                          '6. Third-Party Services',
+                          'The App may rely on third-party platforms essential for its functionality, including but not limited to Supabase, Firebase, GitHub.\n\n'
+                              'These services operate under their own terms and privacy policies.\n'
+                              'The Company is not liable for:\n'
+                              '• Downtime or disruptions caused by third-party providers\n'
+                              '• Data loss or performance issues due to external service outages\n'
+                              '• Policy or technical changes introduced by these service providers\n\n'
+                              'The Client acknowledges that the App depends partially on the availability and performance of these third-party systems.'
+                      ),
+                      _buildTermSection(
+                          '7. Software Updates',
+                          '• All updates, patches, and enhancements will be planned, discussed, and coordinated directly with the Client.\n'
+                              '• Updates may include improvements, bug fixes, or new modules.\n'
+                              '• No unannounced automatic updates will be pushed unless explicitly agreed.'
+                      ),
+                      _buildTermSection(
+                          '8. Prohibited Use',
+                          'The Client and authorized users must not:\n\n'
+                              '• Use the App for illegal or unauthorized purposes\n'
+                              '• Attempt to bypass, hack, or exploit the App’s security systems\n'
+                              '• Conduct penetration testing without the Company’s written approval\n'
+                              '• Share internal business data externally without authorization\n'
+                              '• Upload malicious files or engage in harmful activities\n'
+                              '• Use the App beyond the operational scope agreed with the Company\n\n'
+                              'Misuse may result in immediate suspension or termination of access.'
+                      ),
+                      _buildTermSection(
+                          '9. Warranty Disclaimer',
+                          'The App is provided on an “as-is” and “as-available” basis.\n\n'
+                              'The Company does not guarantee:\n'
+                              '• Uninterrupted access\n'
+                              '• Error-free performance\n'
+                              '• Compatibility with third-party hardware or software not approved by the Company\n'
+                              '• Accuracy of data entered by the Client’s users\n\n'
+                              'The Company is not responsible for operational decisions made based on the data provided through the App.'
+                      ),
+                      _buildTermSection(
+                          '10. Limitation of Liability',
+                          'To the maximum extent permitted by law, the Company is not liable for:\n\n'
+                              '• Financial losses or business disruptions\n'
+                              '• Supply chain delays or production issues\n'
+                              '• Incorrect entries or data provided by users\n'
+                              '• Data loss caused by third-party services\n'
+                              '• Any indirect, incidental, or consequential damages\n\n'
+                              'The Client is solely responsible for validating decisions based on the App’s information.'
+                      ),
+                      _buildTermSection(
+                          '11. Termination',
+                          'The Company may suspend or terminate App access under the following circumstances:\n\n'
+                              '• Violation of these Terms\n'
+                              '• Unauthorized access attempts\n'
+                              '• Security threats\n'
+                              '• Expiry or termination of the service agreement\n\n'
+                              'The Client may request account deletion or data removal at any time.'
+                      ),
+                      _buildTermSection(
+                          '12. Governing Law',
+                          'These Terms shall be governed by and interpreted according to the laws of Gurgaon, Haryana, India.\n'
+                              'Any disputes shall fall under the exclusive jurisdiction of courts located in Gurgaon, Haryana.'
+                      ),
+                      Container(
+                        width: isWeb ? constraints.maxWidth * 0.8 : double
+                            .infinity,
+                        padding: EdgeInsets.all(cardPadding),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12.0),
+                          border: Border.all(color: Colors.grey[300]!),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                                Icons.info_outline, color: Palette.primaryBlue),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Last Updated: November 2025',
+                                style: TextStyle(
+                                  fontSize: isWeb ? 11.0 : 10.0,
+                                  color: Colors.grey,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+      ),
         ),
       ),
     );
@@ -694,22 +773,55 @@ class _SiteListScreenState extends State<SiteListScreen> {
   // It just makes the formatting cleaner and easier to manage.
   //
   Widget _buildTermSection(String title, String content) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWeb = constraints.maxWidth > 600;
+        final cardPadding = isWeb ? 24.0 : 16.0;
+        final titleFontSize = isWeb ? 16.0 : 14.0;
+        final contentFontSize = isWeb ? 13.0 : 12.0;
+        final titlePadding = isWeb ? 16.0 : 12.0;
+        
+        return Container(
+          width: isWeb ? constraints.maxWidth * 0.9 : double.infinity,
+          margin: const EdgeInsets.only(bottom: 20.0),
+          padding: EdgeInsets.all(cardPadding),
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: BorderRadius.circular(12.0),
+            border: Border.all(color: Colors.grey[300]!, width: 1),
           ),
-          const SizedBox(height: 8),
-          Text(
-            content,
-            style: const TextStyle(fontSize: 16, height: 1.4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: titlePadding, vertical: 8.0),
+                decoration: BoxDecoration(
+                  color: Palette.primaryBlue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: titleFontSize, 
+                    fontWeight: FontWeight.bold,
+                    color: Palette.primaryBlue,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                content,
+                style: TextStyle(
+                  fontSize: contentFontSize, 
+                  height: 1.6,
+                  color: Colors.black87,
+                ),
+                textAlign: TextAlign.justify,
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -717,186 +829,302 @@ class _SiteListScreenState extends State<SiteListScreen> {
   void _showHelpScreen() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => Scaffold( // <-- Building the screen right here
+        builder: (context) => Scaffold(
           appBar: AppBar(
-            title: const Text('Help & User Guide'),
+            title: const Text('Help & Support'),
             backgroundColor: Palette.primaryBlue,
             foregroundColor: Palette.white,
           ),
-          body: const SingleChildScrollView(
-            padding: EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'How to Use the App (SOP)',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                ),
-                SizedBox(height: 20),
-
-                Text(
-                  'Table of Contents',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  '''
-1. Introduction
-2. Getting Started
-3. Site Management
-4. Dashboard
-5. Expense Management
-6. Inventory Management
-7. Troubleshooting
-        ''',
-                  style: TextStyle(fontSize: 16),
-                ),
-
-                SizedBox(height: 24),
-                Text(
-                  'Introduction',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'VisionVolcan Site Management App is designed to help construction site managers track expenses, manage inventory, and monitor project progress efficiently. This guide provides step-by-step instructions on how to use all the features of the application.',
-                  style: TextStyle(fontSize: 16),
-                ),
-
-                SizedBox(height: 24),
-                Text(
-                  'Getting Started',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  '''
-Logging In
-• Open the VisionVolcan Site Management App
-• Enter your credentials (username and password)
-• Tap "Login" to access the application
-
-Navigating the App
-The app has three main sections:
-• Dashboard: Overview of site statistics and recent activities
-• Expenses: Manage raw materials and contractor expenses
-• Inventory: Track and manage site inventory
-        ''',
-                  style: TextStyle(fontSize: 16),
-                ),
-
-                SizedBox(height: 24),
-                Text(
-                  'Site Management',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  '''
-Viewing Site List
-• After login, you'll see a list of all active sites.
-• Each card shows: Site name, Location, Project status, Progress %, and Dates.
-
-Creating a New Site
-• Tap the "+" button in the bottom right corner.
-• Fill in the site details and tap "Create Site".
-
-Marking a Site as Completed
-• Tap the three dots (⋮) on a site card.
-• Select "Mark as Completed" and confirm.
-        ''',
-                  style: TextStyle(fontSize: 16),
-                ),
-
-                SizedBox(height: 24),
-                Text(
-                  'Dashboard',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  '''
-Overview
-• View total project cost, amount spent, pending payments, and progress.
-
-Recent Activities
-• Material purchases
-• Contractor payments
-• Inventory updates
-        ''',
-                  style: TextStyle(fontSize: 16),
-                ),
-
-                SizedBox(height: 24),
-                Text(
-                  'Expense Management',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  '''
-Adding Raw Material Expense
-• Go to "Expenses" → "Add Material"
-• Fill details like name, quantity, unit, rate, sector, and date
-• Tap "Save"
-
-Adding Contractor Payment
-• Switch to "Contractors" view → "Add Contractor"
-• Enter contractor details, payment schedule, and save
-
-Viewing and Filtering Expenses
-• Use search bar and filters to find or sort expenses
-        ''',
-                  style: TextStyle(fontSize: 16),
-                ),
-
-                SizedBox(height: 24),
-                Text(
-                  'Inventory Management',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  '''
-Viewing Inventory
-• Navigate to "Inventory" tab to see all items
-
-Updating Inventory
-• Tap item → Update quantity → Add notes → Save
-
-Adding New Inventory Item
-• Tap "+" → Enter details → Tap "Add Item"
-        ''',
-                  style: TextStyle(fontSize: 16),
-                ),
-
-                SizedBox(height: 24),
-                Text(
-                  'Troubleshooting',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  '''
-Can't log in?
-• Check internet connection and credentials
-
-Data not updating?
-• Pull to refresh, or log out and back in
-
-App crashes?
-• Close & reopen the app, clear cache, or update to latest version
-
-Support
-For additional help, contact:
-Email: info@volcanvision.com
-        ''',
-                  style: TextStyle(fontSize: 16),
-                ),
-              ],
+          body: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.white,
+                  Colors.grey[50]!,
+                ],
+              ),
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(20.0),
+                    decoration: BoxDecoration(
+                      color: Palette.primaryBlue,
+                      borderRadius: BorderRadius.circular(16.0),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Palette.primaryBlue.withOpacity(0.3),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.help_outline,
+                          size: 48,
+                          color: Palette.white,
+                        ),
+                        SizedBox(height: 12),
+                        Text(
+                          'Help & Support Center',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Palette.white,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Find answers to frequently asked questions',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white70,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  
+                  _buildFAQCategory('Getting Started', [
+                    _buildFAQItem('How do I log in to the application?', 
+                      'To log in:\n\n1. Open the VisionVolcan Site Management App\n2. Enter your assigned username and password\n3. Tap the "Login" button\n4. You will be redirected to the main dashboard\n\nIf you encounter login issues, please contact your administrator or email info@volcanvision.com'),
+                    _buildFAQItem('What are the system requirements?', 
+                      'The app requires:\n\n• Android 6.0+ or iOS 12.0+\n• Minimum 2GB RAM\n• Stable internet connection\n• 50MB free storage space\n• Supabase authentication access'),
+                    _buildFAQItem('How do I reset my password?', 
+                      'For password reset:\n\n1. Contact your system administrator\n2. Or email support at info@volcanvision.com\n3. Provide your user ID and registered email\n4. Follow the instructions sent to your email'),
+                  ]),
+                  
+                  _buildFAQCategory('Site Management', [
+                    _buildFAQItem('How do I create a new construction site?', 
+                      'To create a new site:\n\n1. Tap the "+" button in the bottom right corner\n2. Fill in the required details:\n   - Site Name\n   - Location\n   - Plot Size (optional)\n   - Number of Floors (optional)\n   - Start Date\n   - Estimated Completion Date\n3. Tap "Add" to create the site\n4. The site will appear in your ongoing sites list'),
+                    _buildFAQItem('How do I mark a site as completed?', 
+                      'To mark a site as completed:\n\n1. Find the site in your ongoing sites list\n2. Long-press on the site card\n3. Select "Mark as Completed" from the menu\n4. Confirm your choice\n5. The site will move to the completed section'),
+                    _buildFAQItem('Can I edit site details after creation?', 
+                      'Currently, direct editing of site details is not available. For modifications:\n\n1. Delete the existing site\n2. Create a new site with updated details\n3. Contact support for bulk updates'),
+                    _buildFAQItem('How do I delete a site?', 
+                      'To delete a site:\n\n1. Long-press on the site card\n2. Select "Delete Site" from the menu\n3. Confirm the deletion\n\n⚠️ Warning: This action is permanent and cannot be undone'),
+                  ]),
+                  
+                  _buildFAQCategory('Inventory Management', [
+                    _buildFAQItem('How do I track inventory for a site?', 
+                      'To manage inventory:\n\n1. Select the desired site from the dashboard\n2. Navigate to the "Inventory" tab\n3. View all current inventory items with quantities\n4. Tap "Add Item" to add new inventory\n5. Update quantities by tapping existing items'),
+                    _buildFAQItem('What inventory fields are available?', 
+                      'Inventory items include:\n\n• Item Name\n• Description\n• Current Quantity\n• Unit (e.g., pieces, kg, bags)\n• Last Updated Date\n• Notes/Remarks'),
+                    _buildFAQItem('How do I update inventory quantities?', 
+                      'To update quantities:\n\n1. Go to the Inventory tab\n2. Tap on the item you want to update\n3. Edit the quantity field\n4. Add notes if needed\n5. Save the changes'),
+                  ]),
+                  
+                  _buildFAQCategory('Expense Tracking', [
+                    _buildFAQItem('How do I add expenses for a site?', 
+                      'To add expenses:\n\n1. Select the site from dashboard\n2. Go to "Expenses" tab\n3. Choose expense type:\n   - "Add Material" for raw materials\n   - "Add Contractor" for labor costs\n4. Fill in details:\n   - Item/Contractor Name\n   - Quantity/Units\n   - Rate per unit\n   - Total amount\n   - Date\n5. Save the expense'),
+                    _buildFAQItem('What types of expenses can I track?', 
+                      'The app tracks:\n\n• Raw Materials (cement, steel, bricks, etc.)\n• Contractor Payments\n• Labor Costs\n• Equipment Rentals\n• Miscellaneous expenses\n• Date-wise expense breakdown'),
+                    _buildFAQItem('How do I view expense reports?', 
+                      'To view expenses:\n\n1. Select the site\n2. Go to "Expenses" tab\n3. View all expenses organized by date\n4. See total expense amount at the top\n5. Filter by date range if needed'),
+                    _buildFAQItem('Can I edit or delete expenses?', 
+                      'Currently, expenses cannot be edited after creation. For corrections:\n\n1. Contact support for bulk corrections\n2. Or add a new corrective entry\n3. Future updates will include edit functionality'),
+                  ]),
+                  
+                  _buildFAQCategory('Dashboard & Navigation', [
+                    _buildFAQItem('What does the main dashboard show?', 
+                      'The dashboard displays:\n\n• Toggle between Ongoing and Completed sites\n• Search functionality for sites\n• Site cards with:\n   - Site name\n   - Location\n   - Status indicator\n   - Quick access to site details'),
+                    _buildFAQItem('How does the search functionality work?', 
+                      'Search features:\n\n• Search by site name\n• Search by location\n• Real-time filtering as you type\n• Works for both ongoing and completed sites'),
+                    _buildFAQItem('What do the different colors and icons mean?', 
+                      'Visual indicators:\n\n• Blue icon with construction symbol: Ongoing site\n• Green icon with checkmark: Completed site\n• Blue app bar: Primary navigation\n• Red text: Delete actions\n• Green text: Confirm/completion actions'),
+                  ]),
+                  
+                  _buildFAQCategory('Technical Support', [
+                    _buildFAQItem('What should I do if the app is not updating?', 
+                      'Troubleshooting steps:\n\n1. Pull down to refresh the screen\n2. Check your internet connection\n3. Close and reopen the app\n4. Log out and log back in\n5. Clear app cache if needed\n6. Contact support if issues persist'),
+                    _buildFAQItem('How do I report bugs or issues?', 
+                      'To report issues:\n\n1. Email: info@volcanvision.com\n2. Include:\n   - Description of the issue\n   - Steps to reproduce\n   - Screenshots if possible\n   - Your device information\n   - App version'),
+                    _buildFAQItem('Is my data backed up automatically?', 
+                      'Data backup information:\n\n• All data is stored on Supabase cloud servers\n• Automatic real-time synchronization\n• Data is backed up regularly\n• No data loss when switching devices\n• Export options available on request'),
+                    _buildFAQItem('How secure is my data?', 
+                      'Security features:\n\n• Encrypted data transmission\n• Secure authentication via Supabase\n• Role-based access control\n• Regular security audits\n• Compliance with data protection standards'),
+                  ]),
+                  
+                  _buildFAQCategory('Account & Settings', [
+                    _buildFAQItem('How do I access account settings?', 
+                      'Account settings:\n\n1. Tap the menu icon (⋮) in the app bar\n2. Select "Account Settings"\n3. Currently in development - coming soon!\n4. Future features include profile management and preferences'),
+                    _buildFAQItem('How do I log out securely?', 
+                      'To log out:\n\n1. Tap the menu icon (⋮)\n2. Select "Logout"\n3. Confirm the logout action\n4. You will be redirected to the login screen\n5. All local data is cleared for security'),
+                    _buildFAQItem('Can I use the app on multiple devices?', 
+                      'Multi-device usage:\n\n• Yes, you can use the app on multiple devices\n• Data syncs automatically across devices\n• Use the same login credentials\n• Changes reflect in real-time'),
+                  ]),
+                  
+                  const SizedBox(height: 24),
+                  
+                  Container(
+                    padding: const EdgeInsets.all(20.0),
+                    decoration: BoxDecoration(
+                      color: Palette.primaryBlue.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12.0),
+                      border: Border.all(color: Palette.primaryBlue.withOpacity(0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.contact_support, color: Palette.primaryBlue, size: 28),
+                            SizedBox(width: 12),
+                            Text(
+                              'Still Need Help?',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Palette.primaryBlue,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Our support team is here to assist you with any questions or issues.',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(12.0),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8.0),
+                          ),
+                          child: const Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.email, color: Palette.primaryBlue, size: 20),
+                                  SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text('info@volcanvision.com', 
+                                        style: TextStyle(fontWeight: FontWeight.w600),
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Icon(Icons.language, color: Palette.primaryBlue, size: 20),
+                                  SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text('www.volcanvision.com', 
+                                        style: TextStyle(fontWeight: FontWeight.w600),
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Icon(Icons.phone, color: Palette.primaryBlue, size: 20),
+                                  SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text('Support: Mon-Fri, 9AM-6PM IST', 
+                                        style: TextStyle(fontWeight: FontWeight.w600),
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 32),
+                ],
+              ),
             ),
           ),
         ),
+      ),
+    );
+  }
+  
+  Widget _buildFAQCategory(String title, List<Widget> items) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+            decoration: BoxDecoration(
+              color: Palette.primaryBlue,
+              borderRadius: BorderRadius.circular(10.0),
+            ),
+            child: Text(
+              title,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          ...items,
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildFAQItem(String question, String answer) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10.0),
+        border: Border.all(color: Colors.grey[300]!),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+        title: Text(
+          question,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              answer,
+              style: const TextStyle(
+                fontSize: 11,
+                height: 1.5,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

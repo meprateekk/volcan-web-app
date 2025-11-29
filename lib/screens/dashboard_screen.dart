@@ -1143,7 +1143,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 fontSize: 16,
                               ),
                             ),
-                            subtitle: Text('$date (at ₹${_formatCurrency(rate)})'),
+                            subtitle: Text('$date (at ${_formatCurrency(rate)})'),
                             trailing: Text(
                               _formatCurrency(cost),
                               style: const TextStyle(
