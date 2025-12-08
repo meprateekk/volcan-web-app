@@ -423,7 +423,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                           child: DropdownButtonFormField<String>(
                             value: selectedUnit,
                             decoration: const InputDecoration(labelText: 'Unit'),
-                            items: ['units', 'bags', 'kg', 'ton', 'feet', 'meters', 'liters', 'boxes']
+                            items: ['units', 'bags', 'kg', 'ton', 'feet', 'meters', 'liters', 'boxes', 'bundles']
                                 .map((String value) {
                               return DropdownMenuItem<String>(
                                 value: value,
@@ -702,7 +702,9 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
   }
 
   String _formatNumber(double amount) {
-    if (amount >= 100000) {
+    if (amount >= 10000000) {  // 1 crore or more
+      return '${(amount / 10000000).toStringAsFixed(2)}Cr';
+    } else if (amount >= 100000) {  // 1 lakh or more
       return '${(amount / 100000).toStringAsFixed(1)}L';
     } else if (amount >= 1000) {
       return '${(amount / 1000).toStringAsFixed(1)}K';
@@ -1183,84 +1185,129 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
       );
     }
 
-    _filteredPurchasedItems.sort((a, b) {
-      final dateA = _parseDate(a['date_of_purchase'] ?? '');
-      final dateB = _parseDate(b['date_of_purchase'] ?? '');
-      return _sortByDateAscending ? dateA.compareTo(dateB) : dateB.compareTo(dateA);
-    });
+    // 1. Group the items by Sector
+    Map<String, List<Map<String, dynamic>>> groupedItems = {};
+    for (var item in _filteredPurchasedItems) {
+      String sector = item['sector'] ?? 'Uncategorized';
+      if (sector.trim().isEmpty) sector = 'Uncategorized';
 
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          columns: const [
-            DataColumn(label: Text('Material', style: TextStyle(fontWeight: FontWeight.bold))),
-            DataColumn(label: Text('Purchase Date', style: TextStyle(fontWeight: FontWeight.bold))),
-            DataColumn(label: Text('Quantity', style: TextStyle(fontWeight: FontWeight.bold))),
-            DataColumn(label: Text('Rate', style: TextStyle(fontWeight: FontWeight.bold))),
-            DataColumn(label: Text('Total Cost', style: TextStyle(fontWeight: FontWeight.bold))),
-            DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold))),
-          ],
+      if (!groupedItems.containsKey(sector)) {
+        groupedItems[sector] = [];
+      }
+      groupedItems[sector]!.add(item);
+    }
 
-          rows: _filteredPurchasedItems.map((item) {
+    // 2. Build a List of ExpansionTiles (one for each sector)
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 80), // Space for FAB
+      children: groupedItems.entries.map((entry) {
+        String sectorName = entry.key;
+        List<Map<String, dynamic>> items = entry.value;
 
-            final rate = (item['rate'] as num?)?.toDouble() ?? 0.0;
-            final totalCost = (item['total_amount'] as num?)?.toDouble() ?? 0.0;
+        // Sort items inside the sector by date (newest first)
+        items.sort((a, b) {
+          final dateA = _parseDate(a['date_of_purchase'] ?? '');
+          final dateB = _parseDate(b['date_of_purchase'] ?? '');
+          // Always sort newest on top inside the sector for easier tracking
+          return dateB.compareTo(dateA);
+        });
 
-            return DataRow(
-              cells: [
-                DataCell(Text(item['material'] ?? 'Unknown')),
-                DataCell(Text(item['date_of_purchase'] ?? 'No date')),
-                DataCell(Text('${item['quantity']} ${item['unit']}')),
-                DataCell(Text('₹${_formatNumber(rate)}')),
-                DataCell(Text(
-                  '₹${_formatNumber(totalCost)}',
-                  style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
-                )),
+        // Calculate total cost for this specific sector
+        double sectorTotal = items.fold(0, (sum, item) => sum + ((item['total_amount'] as num?)?.toDouble() ?? 0.0));
 
-                DataCell(
-                  IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-                    tooltip: 'Delete Purchase Record',
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('Delete Purchase?'),
-                          content: const Text('This will permanently delete this purchase record and affect your stock. Are you sure?'),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: const Text('Cancel'),
-                            ),
-                            TextButton(
-                              onPressed: () async {
-                                if (item['id'] != null) {
-                                  await ExpenseService.instance.deleteMaterialPurchase(item['id']!.toString());
-                                }
-                                _refreshPurchases();
-                                // Refresh suggestions in case that was the only item!
-                                _loadSuggestions();
-                                if (!mounted) return;
-                                Navigator.pop(context);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Purchase deleted.'), backgroundColor: Colors.green),
-                                );
-                              },
-                              child: const Text('Delete', style: TextStyle(color: Colors.red)),
-                            ),
-                          ],
+        return Card(
+          elevation: 2,
+          margin: const EdgeInsets.only(bottom: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: ExpansionTile(
+            leading: CircleAvatar(
+              backgroundColor: Palette.primaryBlue.withOpacity(0.1),
+              child: Icon(Icons.category, color: Palette.primaryBlue, size: 20),
+            ),
+            title: Text(
+              sectorName,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            subtitle: Text(
+              'Total: ₹${_formatNumber(sectorTotal)}', // Shows sector total on the header
+              style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w600),
+            ),
+            children: [
+              // Horizontal Scroll for the table inside the sector
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  columnSpacing: 20,
+                  columns: const [
+                    DataColumn(label: Text('Material', style: TextStyle(fontWeight: FontWeight.bold))),
+                    DataColumn(label: Text('Date', style: TextStyle(fontWeight: FontWeight.bold))),
+                    DataColumn(label: Text('Qty', style: TextStyle(fontWeight: FontWeight.bold))),
+                    DataColumn(label: Text('Rate', style: TextStyle(fontWeight: FontWeight.bold))),
+                    DataColumn(label: Text('Cost', style: TextStyle(fontWeight: FontWeight.bold))),
+                    DataColumn(label: Text('Action', style: TextStyle(fontWeight: FontWeight.bold))),
+                  ],
+                  rows: items.map((item) {
+                    final rate = (item['rate'] as num?)?.toDouble() ?? 0.0;
+                    final totalCost = (item['total_amount'] as num?)?.toDouble() ?? 0.0;
+
+                    return DataRow(
+                      cells: [
+                        DataCell(Text(item['material'] ?? 'Unknown', style: const TextStyle(fontWeight: FontWeight.w500))),
+                        DataCell(Text(item['date_of_purchase'] ?? '-')),
+                        DataCell(Text('${item['quantity']} ${item['unit']}')),
+                        DataCell(Text('₹${_formatNumber(rate)}')),
+                        DataCell(Text(
+                          '₹${_formatNumber(totalCost)}',
+                          style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                        )),
+                        DataCell(
+                          IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                            onPressed: () {
+                              _confirmDeletePurchase(item);
+                            },
+                          ),
                         ),
-                      );
-                    },
-                  ),
+                      ],
+                    );
+                  }).toList(),
                 ),
-              ],
-            );
-          }).toList(),
-        ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  // Helper function to keep code clean
+  void _confirmDeletePurchase(Map<String, dynamic> item) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Purchase?'),
+        content: Text('Delete ${item['material']} entry? This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              if (item['id'] != null) {
+                await ExpenseService.instance.deleteMaterialPurchase(item['id']!.toString());
+              }
+              _refreshPurchases();
+              _loadSuggestions();
+              if (!mounted) return;
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Purchase deleted.'), backgroundColor: Colors.green),
+              );
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
       ),
     );
   }

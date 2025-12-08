@@ -558,13 +558,90 @@ class _InventoryScreenState extends State<InventoryScreen> {
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Text(
-            _searchQuery.isEmpty ? 'No ${_showStock ? 'stock' : 'consumed items'} found' : 'No matching items found',
+            _searchQuery.isEmpty
+                ? 'No ${_showStock ? 'stock' : 'consumed items'} found'
+                : 'No matching items found',
             style: const TextStyle(fontSize: 16, color: Colors.grey),
           ),
         ),
       );
     }
 
+    // --- NEW LOGIC FOR STOCK VIEW (Grouped by Sector) ---
+    if (_showStock) {
+      // 1. Group items by Sector
+      Map<String, List<Map<String, dynamic>>> groupedStock = {};
+      for (var item in _filteredItems) {
+        String sector = item['sector'] ?? 'Uncategorized';
+        if (!groupedStock.containsKey(sector)) {
+          groupedStock[sector] = [];
+        }
+        groupedStock[sector]!.add(item);
+      }
+
+      // 2. Return a ListView of Sectors
+      return ListView(
+        // *** THE FIX IS HERE ***
+        shrinkWrap: true, // Tells ListView to shrink to fit its content
+        physics: const NeverScrollableScrollPhysics(), // Disables inner scrolling so parent scrolls
+        // ***********************
+        padding: const EdgeInsets.only(bottom: 80),
+        children: groupedStock.entries.map((entry) {
+          String sectorName = entry.key;
+          List<Map<String, dynamic>> items = entry.value;
+
+          return Card(
+            elevation: 2,
+            margin: const EdgeInsets.only(bottom: 12),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: ExpansionTile(
+              leading: CircleAvatar(
+                backgroundColor: Palette.primaryBlue.withOpacity(0.1),
+                child: Icon(Icons.category, color: Palette.primaryBlue, size: 20),
+              ),
+              title: Text(
+                sectorName,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              subtitle: Text(
+                '${items.length} Unique Materials',
+                style: const TextStyle(color: Colors.grey, fontSize: 12),
+              ),
+              children: [
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                    columns: const [
+                      DataColumn(label: Text('Material', style: TextStyle(fontWeight: FontWeight.bold))),
+                      DataColumn(label: Text('Current Stock', style: TextStyle(fontWeight: FontWeight.bold))),
+                    ],
+                    rows: items.map((item) {
+                      return DataRow(
+                        cells: [
+                          DataCell(Text(
+                              item['material'] ?? '',
+                              style: const TextStyle(fontWeight: FontWeight.w500)
+                          )),
+                          DataCell(Text(
+                            '${item['quantity']} ${item['unit']}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: (item['quantity'] ?? 0) <= 0 ? Colors.red : Colors.green,
+                            ),
+                          )),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      );
+    }
+
+    // --- OLD LOGIC FOR CONSUMED VIEW ---
     return Center(
       child: Card(
         elevation: 4,
@@ -572,16 +649,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: DataTable(
-            columns: _showStock
-                ? _getStockColumns()
-                : _getConsumedColumns(),
-
+            columns: _getConsumedColumns(),
             rows: _filteredItems.map((item) {
-              if (_showStock) {
-                return _buildStockRow(item);
-              } else {
-                return _buildConsumedRow(item);
-              }
+              return _buildConsumedRow(item);
             }).toList(),
           ),
         ),

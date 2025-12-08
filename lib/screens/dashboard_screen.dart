@@ -121,7 +121,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   String _formatCurrency(double amount) {
-    if (amount >= 100000) {
+    if (amount >= 10000000) {
+      // 1 Crore = 100 Lakhs = 10,000,000
+      return '₹${(amount / 10000000).toStringAsFixed(2)}Cr';
+    } else if (amount >= 100000) {
       return '₹${(amount / 100000).toStringAsFixed(1)}L';
     } else if (amount >= 1000) {
       return '₹${(amount / 1000).toStringAsFixed(1)}K';
@@ -398,7 +401,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         backgroundColor: Palette.primaryBlue,
         title: Row(
           children: [
-            Text(widget.siteData['name']!),
+            Flexible(child: Text(widget.siteData['name']!)),
             const SizedBox(width: 8),
 
           ],
