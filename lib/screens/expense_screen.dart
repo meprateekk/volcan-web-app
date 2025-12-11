@@ -85,6 +85,151 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
     });
   }
 
+
+  // --- NEW: Add Payment Dialog ---
+  void _showAddPaymentDialog(Map<String, dynamic> contractor) {
+    final TextEditingController payAmountController = TextEditingController();
+    final TextEditingController payDateController = TextEditingController();
+    payDateController.text = DateFormat("dd MMM yyyy").format(DateTime.now());
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Add Payment for ${contractor['name']}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: payAmountController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Paying Amount',
+                  prefixIcon: Text('₹ '),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: payDateController,
+                readOnly: true,
+                decoration: const InputDecoration(
+                  labelText: 'Payment Date',
+                  prefixIcon: Icon(Icons.calendar_today),
+                ),
+                onTap: () async {
+                  DateTime? picked = await showDatePicker(
+                    context: context,
+                    initialDate: DateTime.now(),
+                    firstDate: DateTime(2022),
+                    lastDate: DateTime(2030),
+                  );
+                  if (picked != null) {
+                    payDateController.text = DateFormat("dd MMM yyyy").format(picked);
+                  }
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+              onPressed: () {
+                final amountStr = payAmountController.text.trim();
+                if (amountStr.isEmpty) return;
+
+                final double newPayment = double.tryParse(amountStr) ?? 0;
+
+                // 1. Get Current Values
+                double total = (contractor['totalRaw'] as num?)?.toDouble() ?? 0.0;
+                double oldPaid = (contractor['paidRaw'] as num?)?.toDouble() ?? 0.0;
+
+                // 2. Calculate New Totals
+                double newPaidTotal = oldPaid + newPayment;
+                double newPending = total - newPaidTotal;
+
+                // 3. Update History List
+                List<dynamic> history = List.from(contractor['installmentsData'] ?? []);
+                history.add({
+                  'amount': newPayment.toStringAsFixed(0),
+                  'date': payDateController.text,
+                  'status': 'paid' // Mark as paid for the log
+                });
+
+                // 4. Create Update Object
+                final updatedContractor = {
+                  'site_id': widget.siteData['id']!,
+                  'name': contractor['name'],
+                  'sector': contractor['sector'],
+                  'total': total.toStringAsFixed(0),
+                  'paid': newPaidTotal.toStringAsFixed(0),
+                  'pending': newPending.toStringAsFixed(0),
+                  'installments': history,
+                };
+
+                // 5. Save to Database
+                if (contractor['id'] != null) {
+                  ExpenseService.instance.updateContractor(contractor['id'].toString(), updatedContractor);
+                }
+
+                _refreshContractors();
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Payment Added Successfully!'), backgroundColor: Colors.green),
+                );
+              },
+              child: const Text('Pay'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+
+
+
+  // --- NEW: Helper to add a custom sector on the fly ---
+  Future<String?> _showAddNewSectorDialog() async {
+    TextEditingController newSectorController = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Add New Sector'),
+          content: TextField(
+            controller: newSectorController,
+            decoration: const InputDecoration(
+              labelText: 'Sector Name',
+              hintText: 'e.g. Plumbing, HVAC',
+            ),
+            textCapitalization: TextCapitalization.sentences,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (newSectorController.text.trim().isNotEmpty) {
+                  String cleanName = _normalizeText(newSectorController.text);
+                  Navigator.pop(context, cleanName);
+                }
+              },
+              child: const Text('Add'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+
+
   // Helper method to update sector based on material
   void _updateSectorFromMaterial(String material) {
     print('Updating sector for material: $material');
@@ -116,13 +261,18 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
       String sec = item['sector'] ?? '';
 
       if (mat.isNotEmpty) {
-        materialSet.add(mat);
-        // Map this material to its sector (e.g. "Cement" -> "Civil")
+        String cleanMat = _normalizeText(mat);
+        materialSet.add(cleanMat);
+
         if (sec.isNotEmpty) {
-          _materialToSectorMap[mat] = sec;
+          String cleanSec = _normalizeText(sec);
+          _materialToSectorMap[cleanMat] = cleanSec;
         }
       }
-      if (sec.isNotEmpty) sectorSet.add(sec);
+
+      if (sec.isNotEmpty) {
+        sectorSet.add(_normalizeText(sec));
+      }
     }
 
     setState(() {
@@ -265,11 +415,12 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
   // --- NEW: Enhanced Dialog with Autocomplete ---
   void _showAddPurchaseDialog() {
     _materialController.clear();
-    _sectorController.clear();
     _rateController.clear();
     _quantityController.clear();
     _dateController.text = DateFormat("dd MMM yyyy").format(DateTime.now());
 
+    // This variable holds the value for the Sector Dropdown
+    String? selectedSector;
     String selectedUnit = 'units';
 
     showDialog(
@@ -277,6 +428,34 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
       builder: (BuildContext context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
+
+            // Helper to handle material text changes/selection
+            void onMaterialChanged(String val) {
+              // 1. Try to find exact match
+              String? matchedSector = _materialToSectorMap[val];
+
+              // 2. If no exact match, try case-insensitive match (e.g. user typed "cement" but map has "Cement")
+              if (matchedSector == null) {
+                final key = _materialToSectorMap.keys.firstWhere(
+                      (k) => k.toLowerCase() == val.toLowerCase(),
+                  orElse: () => '',
+                );
+                if (key.isNotEmpty) {
+                  matchedSector = _materialToSectorMap[key];
+                }
+              }
+
+              // 3. Update the Dropdown if we found a sector
+              if (matchedSector != null) {
+                // Ensure the sector exists in our dropdown list to avoid errors
+                if (_existingSectors.contains(matchedSector)) {
+                  setDialogState(() {
+                    selectedSector = matchedSector;
+                  });
+                }
+              }
+            }
+
             return AlertDialog(
               title: const Text('Log New Material Purchase'),
               content: SingleChildScrollView(
@@ -285,55 +464,24 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                   children: <Widget>[
 
                     // --- 1. Material Autocomplete ---
-                    // Instead of a TextField, we use Autocomplete
                     Autocomplete<String>(
                       optionsBuilder: (TextEditingValue textEditingValue) {
                         if (textEditingValue.text == '') {
                           return const Iterable<String>.empty();
                         }
-                        // Filter the list of existing materials
                         return _existingMaterialNames.where((String option) {
                           return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
                         });
                       },
                       onSelected: (String selection) {
                         _materialController.text = selection;
-                        _updateSectorFromMaterial(selection);
+                        onMaterialChanged(selection); // Check sector map immediately
                       },
                       fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
-                        // Initial sync
-                        textEditingController.text = _materialController.text;
-                        
-                        // Create a new listener
-                        final listener = () {
-                          final text = textEditingController.text.trim();
-                          _materialController.text = text;
-                          
-                          print('Text changed to: $text');
-                          print('Existing materials: ${_existingMaterialNames.take(5)}...');
-                          
-                          // Find exact match in existing materials (case insensitive)
-                          final match = _existingMaterialNames.firstWhere(
-                            (mat) => mat.toLowerCase() == text.toLowerCase(),
-                            orElse: () => '',
-                          );
-                          
-                          if (match.isNotEmpty) {
-                            print('Found exact match: $match');
-                            _updateSectorFromMaterial(match);
-                          } else {
-                            print('No exact match found');
-                            if (mounted) {
-                              setState(() {
-                                _sectorController.clear();
-                              });
-                            }
-                          }
-                        };
-                        
-                        // Remove existing listeners to avoid duplicates
-                        textEditingController.removeListener(listener);
-                        textEditingController.addListener(listener);
+                        // Keep our main controller in sync
+                        if (_materialController.text.isNotEmpty && textEditingController.text.isEmpty) {
+                          textEditingController.text = _materialController.text;
+                        }
 
                         return TextField(
                           controller: textEditingController,
@@ -342,10 +490,10 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                             labelText: 'Material Name (e.g., Cement)',
                             suffixIcon: Icon(Icons.arrow_drop_down),
                           ),
-                          onChanged: (_) {
-                            // This ensures the listener is triggered even if the change
-                            // comes from the autocomplete selection
-                            listener();
+                          onChanged: (val) {
+                            _materialController.text = val;
+                            // Check map as user types (in case they type exact name without clicking suggestion)
+                            onMaterialChanged(val);
                           },
                         );
                       },
@@ -353,37 +501,60 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
 
                     const SizedBox(height: 16),
 
-                    // --- 2. Sector Autocomplete ---
-                    Autocomplete<String>(
-                      optionsBuilder: (TextEditingValue textEditingValue) {
-                        if (textEditingValue.text == '') {
-                          return const Iterable<String>.empty();
-                        }
-                        return _existingSectors.where((String option) {
-                          return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
-                        });
-                      },
-                      onSelected: (String selection) {
-                        _sectorController.text = selection;
-                      },
-                      fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
-                        // If we auto-filled the sector from material selection, update this controller
-                        if (_sectorController.text.isNotEmpty && textEditingController.text.isEmpty) {
-                          textEditingController.text = _sectorController.text;
-                        }
-
-                        textEditingController.addListener(() {
-                          _sectorController.text = textEditingController.text;
-                        });
-
-                        return TextField(
-                          controller: textEditingController,
-                          focusNode: focusNode,
-                          decoration: const InputDecoration(
-                            labelText: 'Sector (e.g., Civil)',
-                            suffixIcon: Icon(Icons.arrow_drop_down),
+                    // --- 2. Sector Dropdown (Forced Selection) ---
+                    DropdownButtonFormField<String>(
+                      value: selectedSector,
+                      decoration: const InputDecoration(
+                        labelText: 'Sector',
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      ),
+                      hint: const Text("Select Sector"),
+                      items: [
+                        // Option A: Existing Sectors
+                        ..._existingSectors.map((String sector) {
+                          return DropdownMenuItem<String>(
+                            value: sector,
+                            child: Text(sector),
+                          );
+                        }),
+                        // Option B: Special "Add New" option
+                        const DropdownMenuItem<String>(
+                          value: 'ADD_NEW_OPTION',
+                          child: Row(
+                            children: [
+                              Icon(Icons.add, color: Colors.blue, size: 18),
+                              SizedBox(width: 8),
+                              Text("Add New Sector...", style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+                            ],
                           ),
-                        );
+                        ),
+                      ],
+                      onChanged: (String? newValue) async {
+                        if (newValue == 'ADD_NEW_OPTION') {
+                          // Open the small dialog to type name
+                          String? newCustomSector = await _showAddNewSectorDialog();
+                          if (newCustomSector != null) {
+                            // Add to global list and select it
+                            if (!_existingSectors.contains(newCustomSector)) {
+                              _existingSectors.add(newCustomSector);
+                              _existingSectors.sort(); // Optional: Keep alphabetical
+                            }
+                            setDialogState(() {
+                              selectedSector = newCustomSector;
+                            });
+                          } else {
+                            // If they cancelled, revert to previous or null
+                            setDialogState(() {
+                              // keep current selectedSector
+                            });
+                          }
+                        } else {
+                          // Normal selection
+                          setDialogState(() {
+                            selectedSector = newValue;
+                          });
+                        }
                       },
                     ),
 
@@ -461,15 +632,17 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                 ElevatedButton(
                   onPressed: () async {
                     try {
-                      final material = _materialController.text.trim();
-                      final sector = _sectorController.text.trim();
+                      final material = _normalizeText(_materialController.text);
+                      // Use the dropdown variable, not the old controller
+                      final rawSector = selectedSector ?? '';
+                      final sector = _normalizeText(rawSector);
                       final date = _dateController.text;
                       final quantity = int.tryParse(_quantityController.text) ?? 0;
                       final rate = double.tryParse(_rateController.text) ?? 0.0;
 
-                      if (material.isEmpty || quantity <= 0 || rate <= 0) {
+                      if (material.isEmpty || sector == "Uncategorized" || quantity <= 0 || rate <= 0){
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Please fill all fields with valid numbers.'), backgroundColor: Colors.red),
+                          const SnackBar(content: Text('Please fill all fields (check Sector).'), backgroundColor: Colors.red),
                         );
                         return;
                       }
@@ -490,7 +663,6 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                       await ExpenseService.instance.addMaterialPurchase(newPurchase);
 
                       _refreshPurchases();
-                      // Also refresh suggestions so the new item appears next time!
                       _loadSuggestions();
 
                       if (!mounted) return;
@@ -531,14 +703,24 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
 
     _nameController.text = contractor?['name'] ?? '';
     _contractorSectorController.text = contractor?['sector'] ?? '';
-    _totalAmountController.text = contractor?['total']?.replaceAll('₹', '').replaceAll(',', '').replaceAll('L', '000').replaceAll('K', '00') ?? '';
-    _paidAmountController.text = contractor?['paid']?.replaceAll('₹', '').replaceAll(',', '').replaceAll('L', '000').replaceAll('K', '00') ?? '';
 
-    if (isEdit && contractor['installments'] != null) {
-      _currentInstallments = List<Map<String, dynamic>>.from(contractor['installments']);
+    if (contractor != null && contractor['totalRaw'] != null) {
+      // If editing, load the actual number (e.g., "100000")
+      // We convert it to Int to remove .0 if it's a round number
+      double val = contractor['totalRaw'];
+      if (val % 1 == 0) {
+        _totalAmountController.text = val.toInt().toString();
+      } else {
+        _totalAmountController.text = val.toString();
+      }
     } else {
-      _currentInstallments = [];
+      _totalAmountController.text = '';
     }
+
+    // Clean formatting for editing
+    _totalAmountController.text = contractor?['total']?.replaceAll('₹', '').replaceAll(',', '').replaceAll('L', '000').replaceAll('K', '00') ?? '';
+
+    // We no longer need _paidAmountController here
 
     showDialog(
       context: context,
@@ -551,7 +733,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
               children: <Widget>[
                 TextField(
                   controller: _nameController,
-                  decoration:  const InputDecoration(
+                  decoration: const InputDecoration(
                     labelText: 'Contractor Name',
                     prefixIcon: Icon(Icons.person_outline),
                   ),
@@ -559,7 +741,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: _contractorSectorController,
-                  decoration:  const InputDecoration(
+                  decoration: const InputDecoration(
                     labelText: 'Sector',
                     prefixIcon: Icon(Icons.work_outline),
                   ),
@@ -567,36 +749,13 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: _totalAmountController,
-                  decoration:  const InputDecoration(
+                  decoration: const InputDecoration(
                     labelText: 'Total Contract Amount',
                     prefixIcon: Text('₹ ', style: TextStyle(fontSize: 18, color: Colors.black87)),
                   ),
                   keyboardType: TextInputType.number,
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _paidAmountController,
-                  decoration:  const InputDecoration(
-                    labelText: 'Advance',
-                    prefixIcon: Text('₹ ', style: TextStyle(fontSize: 18, color: Colors.black87)),
-                  ),
-                  keyboardType: TextInputType.number,
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    _showInstallmentManager(context);
-                  },
-                  icon: const Icon(Icons.event_note),
-                  label: Text(_currentInstallments.isEmpty
-                      ? 'Add Installments'
-                      : 'Manage Installments (${_currentInstallments.length})'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Palette.primaryBlue,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(double.infinity, 45),
-                  ),
-                ),
+                // "Advance" and "Manage Installments" REMOVED
               ],
             ),
           ),
@@ -612,35 +771,32 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
               ),
               child: Text(isEdit ? 'Update' : 'Add'),
               onPressed: () {
-                final name = _nameController.text.trim();
-                final sector = _contractorSectorController.text.trim();
-                final total = _totalAmountController.text.trim();
-                final paid = _paidAmountController.text.trim();
+                final name = _normalizeText(_nameController.text);
+                final sector = _normalizeText(_contractorSectorController.text);
+                final totalStr = _totalAmountController.text.trim();
 
-                if (name.isNotEmpty && sector.isNotEmpty && total.isNotEmpty) {
-                  final totalAmount = double.tryParse(total) ?? 0;
-                  final paidAmount = double.tryParse(paid.isEmpty ? '0' : paid) ?? 0;
-                  final pendingAmount = totalAmount - paidAmount;
+                if (name.isNotEmpty && sector.isNotEmpty && totalStr.isNotEmpty) {
+                  final totalAmount = double.tryParse(totalStr) ?? 0;
 
-                  String nextPaymentDate = 'Not set';
-                  if (_currentInstallments.isNotEmpty) {
-                    final pendingInstallments = _currentInstallments
-                        .where((inst) => inst['status'] == 'pending')
-                        .toList();
-                    if (pendingInstallments.isNotEmpty) {
-                      nextPaymentDate = pendingInstallments.first['date'];
-                    }
-                  }
+                  // For new contractors, paid starts at 0. For edit, keep existing paid.
+                  final currentPaid = isEdit
+                      ? (double.tryParse(contractor['paid']?.toString().replaceAll(RegExp(r'[^0-9.]'), '') ?? '0') ?? 0)
+                      : 0.0;
+
+                  final pendingAmount = totalAmount - currentPaid;
+
+                  // Keep existing history if editing, otherwise empty list
+                  final currentHistory = isEdit ? contractor['installments'] : [];
 
                   final newContractor = {
                     'site_id': widget.siteData['id']!,
                     'name': name,
                     'sector': sector,
                     'total': totalAmount.toStringAsFixed(0),
-                    'paid': paidAmount.toStringAsFixed(0),
+                    'paid': currentPaid.toStringAsFixed(0),
                     'pending': pendingAmount.toStringAsFixed(0),
-                    'installments': _currentInstallments,
-                    'next_payment_date': nextPaymentDate,
+                    'installments': currentHistory, // Preserves history
+                    'next_payment_date': 'Completed', // No longer scheduling future dates
                     'status': 'Active',
                   };
 
@@ -673,11 +829,11 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
         final paid = double.tryParse(contractor['paid']?.toString() ?? '0') ?? 0;
         final pending = double.tryParse(contractor['pending']?.toString() ?? '0') ?? 0;
 
-        // Handle both String and List<dynamic> for installments
+        // ... (Installment parsing logic remains same) ...
         final dynamic installs = contractor['installments'];
         List<dynamic> installmentsList = [];
         if (installs is String) {
-          // You might need to add jsonDecode if it's a JSON string
+          // logic...
         } else if (installs is List) {
           installmentsList = installs;
         }
@@ -689,9 +845,17 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
           'id': contractor['id']?.toString() ?? '',
           'name': contractor['name']?.toString() ?? '',
           'sector': contractor['sector']?.toString() ?? '',
-          'total': '₹${_formatNumber(total)}',
-          'paid': '₹${_formatNumber(paid)}',
-          'pending': '₹${_formatNumber(pending)}',
+
+          // --- CHANGE START: Store Raw Values for Math ---
+          'totalRaw': total,    // Store 100000.0
+          'paidRaw': paid,      // Store 40000.0
+          'pendingRaw': pending,// Store 60000.0
+          // ---------------------------------------------
+
+          'total': '₹${_formatNumber(total)}', // Display: ₹1.0L
+          'paid': '₹${_formatNumber(paid)}',   // Display: ₹40.0K
+          'pending': '₹${_formatNumber(pending)}', // Display: ₹60.0K
+
           'installmentsCount': installmentsCount.toString(),
           'installmentsPaid': paidInstallments.toString(),
           'installmentsData': installmentsList,
@@ -895,7 +1059,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text('${contractor['name']} - Installments'),
+          title: Text('Payment History - ${contractor['name']}'),
           content: SizedBox(
             width: double.maxFinite,
             child: Column(
@@ -903,9 +1067,9 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
               children: [
                 if (installments.isEmpty)
                   const Padding(
-                    padding: EdgeInsets.all(16.0),
+                    padding: EdgeInsets.all(24.0),
                     child: Text(
-                      'No installments set',
+                      'No payments recorded yet.',
                       style: TextStyle(color: Colors.grey),
                     ),
                   )
@@ -915,46 +1079,26 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                       shrinkWrap: true,
                       itemCount: installments.length,
                       itemBuilder: (context, index) {
-                        final installment = installments[index];
-                        final isPaid = installment['status'] == 'paid';
-                        final amount = double.tryParse(installment['amount']?.toString() ?? '0') ?? 0;
+                        // Show newest first? (Optional: reverse index)
+                        final payment = installments[installments.length - 1 - index];
+                        final amount = double.tryParse(payment['amount']?.toString() ?? '0') ?? 0;
 
                         return Card(
                           margin: const EdgeInsets.only(bottom: 8),
-                          color: isPaid ? Colors.green.shade50 : Colors.orange.shade50,
+                          color: Colors.green.shade50,
                           child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: isPaid ? Colors.green : Colors.orange,
-                              child: Text(
-                                '${index + 1}',
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                              ),
+                            leading: const CircleAvatar(
+                              backgroundColor: Colors.green,
+                              radius: 16,
+                              child: Icon(Icons.check, color: Colors.white, size: 16),
                             ),
                             title: Text(
                               '₹${_formatNumber(amount)}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
+                              style: const TextStyle(fontWeight: FontWeight.bold),
                             ),
                             subtitle: Text(
-                              installment['date'] ?? '',
-                              style: const TextStyle(fontSize: 13),
-                            ),
-                            trailing: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: isPaid ? Colors.green : Colors.orange,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                isPaid ? 'PAID' : 'PENDING',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 11,
-                                ),
-                              ),
+                              payment['date'] ?? '',
+                              style: const TextStyle(fontSize: 12),
                             ),
                           ),
                         );
@@ -1175,6 +1319,20 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
     );
   }
 
+  //data normalizaton
+  String _normalizeText(String? text) {
+    if (text == null || text.trim().isEmpty) return "Uncategorized";
+
+    String trimmed = text.trim(); // Remove spaces from start/end
+
+    // Capitalize first letter, make the rest lowercase
+    return "${trimmed[0].toUpperCase()}${trimmed.substring(1).toLowerCase()}";
+  }
+
+
+
+
+
   Widget _buildPurchaseList() {
     if (_filteredPurchasedItems.isEmpty) {
       return Center(
@@ -1185,37 +1343,41 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
       );
     }
 
-    // 1. Group the items by Sector
+    // 1. Group the items by Normalized Sector
     Map<String, List<Map<String, dynamic>>> groupedItems = {};
-    for (var item in _filteredPurchasedItems) {
-      String sector = item['sector'] ?? 'Uncategorized';
-      if (sector.trim().isEmpty) sector = 'Uncategorized';
 
-      if (!groupedItems.containsKey(sector)) {
-        groupedItems[sector] = [];
+    for (var item in _filteredPurchasedItems) {
+      // RAW DATA: might be "civil" or "Civil"
+      String rawSector = item['sector'] ?? 'Uncategorized';
+
+      // NORMALIZED DATA: becomes "Civil" always
+      String cleanSector = _normalizeText(rawSector);
+
+      if (!groupedItems.containsKey(cleanSector)) {
+        groupedItems[cleanSector] = [];
       }
-      groupedItems[sector]!.add(item);
+      groupedItems[cleanSector]!.add(item);
     }
 
-    // 2. Build a List of ExpansionTiles (one for each sector)
+    // 2. Build a List of ExpansionTiles
     return ListView(
-      padding: const EdgeInsets.only(bottom: 80), // Space for FAB
+      padding: const EdgeInsets.only(bottom: 80),
       children: groupedItems.entries.map((entry) {
-        String sectorName = entry.key;
+        String sectorName = entry.key; // This is now the Clean Name (e.g. "Civil")
         List<Map<String, dynamic>> items = entry.value;
 
-        // Sort items inside the sector by date (newest first)
+        // ... (The rest of your sorting and UI logic remains exactly the same)
         items.sort((a, b) {
+          // ... your sorting logic
           final dateA = _parseDate(a['date_of_purchase'] ?? '');
           final dateB = _parseDate(b['date_of_purchase'] ?? '');
-          // Always sort newest on top inside the sector for easier tracking
           return dateB.compareTo(dateA);
         });
 
-        // Calculate total cost for this specific sector
         double sectorTotal = items.fold(0, (sum, item) => sum + ((item['total_amount'] as num?)?.toDouble() ?? 0.0));
 
         return Card(
+          // ... (Rest of your Card/ExpansionTile code is fine, just use sectorName)
           elevation: 2,
           margin: const EdgeInsets.only(bottom: 12),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1225,15 +1387,15 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
               child: Icon(Icons.category, color: Palette.primaryBlue, size: 20),
             ),
             title: Text(
-              sectorName,
+              sectorName, // <--- This will now always be "Civil", "Electrical", etc.
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             subtitle: Text(
-              'Total: ₹${_formatNumber(sectorTotal)}', // Shows sector total on the header
+              'Total: ₹${_formatNumber(sectorTotal)}',
               style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w600),
             ),
             children: [
-              // Horizontal Scroll for the table inside the sector
+              // ... Your DataTable code here
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: DataTable(
@@ -1252,7 +1414,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
 
                     return DataRow(
                       cells: [
-                        DataCell(Text(item['material'] ?? 'Unknown', style: const TextStyle(fontWeight: FontWeight.w500))),
+                        DataCell(Text(_normalizeText(item['material']), style: const TextStyle(fontWeight: FontWeight.w500))),
                         DataCell(Text(item['date_of_purchase'] ?? '-')),
                         DataCell(Text('${item['quantity']} ${item['unit']}')),
                         DataCell(Text('₹${_formatNumber(rate)}')),
@@ -1363,6 +1525,17 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                         ],
                       ),
                     ),
+
+                    // --- NEW: Add Payment Button ---
+                    IconButton(
+                      icon: const Icon(Icons.add_circle, color: Colors.green, size: 28),
+                      tooltip: 'Add Payment',
+                      onPressed: () {
+                        _showAddPaymentDialog(contractor);
+                      },
+                    ),
+                    // -------------------------------
+
                     IconButton(
                       icon: const Icon(Icons.edit, color: Colors.blue, size: 22),
                       onPressed: () {
@@ -1373,6 +1546,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                     IconButton(
                       icon: const Icon(Icons.delete, color: Colors.red, size: 22),
                       onPressed: () {
+                        // ... (Keep your existing delete logic here)
                         showDialog(
                           context: context,
                           builder: (context) => AlertDialog(
@@ -1390,9 +1564,6 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                                   }
                                   _refreshContractors();
                                   Navigator.pop(context);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Contractor deleted')),
-                                  );
                                 },
                                 child: const Text('Delete', style: TextStyle(color: Colors.red)),
                               ),
@@ -1416,68 +1587,21 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.green.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.green.shade200),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(Icons.check_circle, size: 16, color: Colors.green.shade700),
-                                const SizedBox(width: 6),
-                                Text(
-                                  '${contractor['installmentsPaid']} Installments Paid',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.green.shade700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (contractor['nextPaymentDate'] != 'Not set')
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.schedule, size: 12, color: Colors.orange.shade700),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'Next: ${contractor['nextPaymentDate']}',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.grey.shade700,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
+
+                // Footer Section
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      _showContractorInstallmentsDialog(contractor);
+                    },
+                    icon: const Icon(Icons.history, size: 16),
+                    label: const Text("View Payment History"),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Palette.primaryBlue,
+                      side: BorderSide(color: Palette.primaryBlue.withOpacity(0.5)),
                     ),
-                    const SizedBox(width: 8),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        _showContractorInstallmentsDialog(contractor);
-                      },
-                      icon: const Icon(Icons.visibility, size: 16),
-                      label: const Text('View'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Palette.primaryBlue,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ],
             ),
