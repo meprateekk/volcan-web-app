@@ -322,6 +322,15 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh Data',
+            onPressed: () {
+              _refreshPurchases();
+              _refreshContractors();
+              _loadSuggestions(); // Also refresh suggestions
+            },
+          ),
+          IconButton(
             icon: Icon(_sortByDateAscending ? Icons.arrow_upward : Icons.arrow_downward),
             tooltip: 'Sort by Date',
             onPressed: _sortByDate,

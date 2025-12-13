@@ -407,7 +407,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
         actions: [
-
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh Data',
+            onPressed: () {
+              _loadExpenseData();
+            },
+          ),
           PopupMenuButton<String>(
             icon: Container(
               padding: const EdgeInsets.all(8),

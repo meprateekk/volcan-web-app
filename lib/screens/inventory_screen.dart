@@ -74,6 +74,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh Data',
+            onPressed: () {
+              _refreshInventory();
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.download),
             tooltip: 'Download Inventory',
             onPressed: _downloadInventoryData,
