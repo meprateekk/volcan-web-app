@@ -357,48 +357,60 @@ class _InventoryScreenState extends State<InventoryScreen> {
     );
   }
 
-  void _showAddConsumedDialog() {
-    // Clear fields
-    _quantityController.clear();
-    _floorController.clear();
-    _materialController.clear();
-    _selectedStockItemForUsage = null;
-    _dateController.text = DateFormat('dd MMM yyyy').format(DateTime.now());
+  void _showAddConsumedDialog({Map<String, dynamic>? existingItem}) {
+    final isEdit = existingItem != null;
+
+    if (isEdit) {
+      _quantityController.text = existingItem['quantity']?.toString() ?? '';
+      _floorController.text = existingItem['floor'] ?? '';
+      _dateController.text = existingItem['date_used'] ?? '';
+
+      final currentStockObj = _stockItems.firstWhere(
+            (s) => s['material'] == existingItem['material'] && s['sector'] == existingItem['sector'],
+        orElse: () => {'quantity': 0, 'unit': existingItem['unit'], 'material': existingItem['material'], 'sector': existingItem['sector']},
+      );
+
+      _selectedStockItemForUsage = {
+        'material': existingItem['material'],
+        'sector': existingItem['sector'],
+        'unit': existingItem['unit'],
+        'quantity': (currentStockObj['quantity'] as int) + (existingItem['quantity'] as int),
+      };
+    } else {
+      // 2. Add Mode: Sab clear karo
+      _quantityController.clear();
+      _floorController.clear();
+      _materialController.clear();
+      _selectedStockItemForUsage = null;
+      _dateController.text = DateFormat('dd MMM yyyy').format(DateTime.now());
+    }
 
     final availableStock = _stockItems.where((item) => (item['quantity'] ?? 0) > 0).toList();
-
-    if (availableStock.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No items in stock to consume.'), backgroundColor: Colors.red),
-      );
-      return;
-    }
 
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setState) {
+          builder: (BuildContext context, StateSetter setDialogState) {
             return AlertDialog(
-              title: const Text('Log Material Usage'),
+              title: Text(isEdit ? 'Edit Material Usage' : 'Log Material Usage'),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-
-                    // --- 1. Custom Searchable Selector ---
                     const Text("Material", style: TextStyle(fontSize: 12, color: Colors.grey)),
                     const SizedBox(height: 4),
+
+
                     InkWell(
-                      onTap: () {
-                        _showMaterialSelectionDialog(availableStock, setState);
-                      },
+                      onTap: isEdit ? null : () => _showMaterialSelectionDialog(availableStock, setDialogState),
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                         decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey),
+                          border: Border.all(color: isEdit ? Colors.grey.shade300 : Colors.grey),
                           borderRadius: BorderRadius.circular(4),
+                          color: isEdit ? Colors.grey.shade100 : Colors.transparent,
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -414,7 +426,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                 ),
                               ),
                             ),
-                            const Icon(Icons.arrow_drop_down),
+                            if (!isEdit) const Icon(Icons.arrow_drop_down),
                           ],
                         ),
                       ),
@@ -429,51 +441,25 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       ),
 
                     const SizedBox(height: 16),
-
-                    // --- 2. Floor Input ---
                     TextField(
                       controller: _floorController,
-                      decoration: const InputDecoration(
-                        labelText: 'Floor / Location',
-                        hintText: 'e.g. 1st Floor, Kitchen',
-                        border: OutlineInputBorder(),
-                      ),
+                      decoration: const InputDecoration(labelText: 'Floor / Location', border: OutlineInputBorder()),
                     ),
-
                     const SizedBox(height: 16),
-
-                    // --- 3. Quantity Input ---
                     TextField(
                       controller: _quantityController,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Quantity Used',
-                        border: OutlineInputBorder(),
-                      ),
+                      decoration: const InputDecoration(labelText: 'Quantity Used', border: OutlineInputBorder()),
                     ),
-
                     const SizedBox(height: 16),
-
-                    // --- 4. Date Input ---
                     TextField(
                       controller: _dateController,
-                      decoration: const InputDecoration(
-                        labelText: 'Date Used',
-                        prefixIcon: Icon(Icons.calendar_today),
-                        border: OutlineInputBorder(),
-                      ),
+                      decoration: const InputDecoration(labelText: 'Date Used', prefixIcon: Icon(Icons.calendar_today), border: OutlineInputBorder()),
                       readOnly: true,
                       onTap: () async {
-                        DateTime? pickedDate = await showDatePicker(
-                          context: context,
-                          initialDate: DateTime.now(),
-                          firstDate: DateTime(2000),
-                          lastDate: DateTime(2101),
-                        );
-                        if (pickedDate != null) {
-                          setState(() {
-                            _dateController.text = DateFormat('dd MMM yyyy').format(pickedDate);
-                          });
+                        DateTime? picked = await showDatePicker(context: context, initialDate: DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2101));
+                        if (picked != null) {
+                          setDialogState(() => _dateController.text = DateFormat('dd MMM yyyy').format(picked));
                         }
                       },
                     ),
@@ -481,75 +467,50 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 ),
               ),
               actions: <Widget>[
-                TextButton(
-                  child: const Text('Cancel'),
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                ),
+                TextButton(child: const Text('Cancel'), onPressed: () => Navigator.of(context).pop()),
                 ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Palette.primaryBlue,
-                    foregroundColor: Colors.white,
-                  ),
+                  style: ElevatedButton.styleFrom(backgroundColor: Palette.primaryBlue, foregroundColor: Colors.white),
                   onPressed: _selectedStockItemForUsage == null ? null : () async {
-                    final material = _selectedStockItemForUsage!['material'];
-                    final sector = _selectedStockItemForUsage!['sector'];
-                    final unit = _selectedStockItemForUsage!['unit'];
-                    final quantityInStock = _selectedStockItemForUsage!['quantity'];
+                    final qtyUsed = int.tryParse(_quantityController.text) ?? 0;
 
-                    final quantityStr = _quantityController.text.trim();
-                    final int quantityUsed = int.tryParse(quantityStr) ?? 0;
-                    final floor = _floorController.text.trim();
-
-                    // --- Validation ---
-                    if (quantityUsed <= 0) {
+                    // Validation
+                    if (qtyUsed <= 0 || qtyUsed > _selectedStockItemForUsage!['quantity']) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Please enter a valid quantity'), backgroundColor: Colors.red),
+                        SnackBar(content: Text('Invalid quantity. Max available: ${_selectedStockItemForUsage!['quantity']}'), backgroundColor: Colors.red),
                       );
                       return;
                     }
-                    if (quantityUsed > quantityInStock) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Not enough in stock. Max is $quantityInStock'), backgroundColor: Colors.red),
-                      );
-                      return;
-                    }
-                    if (floor.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Please enter Floor/Location'), backgroundColor: Colors.red),
-                      );
-                      return;
-                    }
-                    // --- End Validation ---
 
-                    final newItem = {
+                    final data = {
                       'site_id': widget.siteData['id']!,
-                      'material': material,
-                      'sector': sector,
-                      'quantity': quantityUsed,
-                      'unit': unit,
+                      'material': _selectedStockItemForUsage!['material'],
+                      'sector': _selectedStockItemForUsage!['sector'],
+                      'quantity': qtyUsed,
+                      'unit': _selectedStockItemForUsage!['unit'],
                       'date_used': _dateController.text,
-                      'floor': floor, // <-- SAVING THE FLOOR
+                      'floor': _floorController.text.trim(),
                     };
 
                     try {
-                      await InventoryService.instance.logMaterialUsage(newItem);
+                      if (isEdit) {
+                        // Service mein update call
+                        await InventoryService.instance.updateConsumedLog(existingItem['id'].toString(), data);
+                      } else {
+                        // Service mein insert call
+                        await InventoryService.instance.logMaterialUsage(data);
+                      }
 
                       _refreshInventory();
                       if (!mounted) return;
                       Navigator.of(context).pop();
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Usage logged successfully'), backgroundColor: Colors.green),
+                        SnackBar(content: Text(isEdit ? 'Log updated' : 'Usage logged'), backgroundColor: Colors.green),
                       );
                     } catch (e) {
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-                      );
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
                     }
                   },
-                  child: const Text('Log Usage'),
+                  child: Text(isEdit ? 'Update Log' : 'Log Usage'),
                 ),
               ],
             );
@@ -708,14 +669,24 @@ class _InventoryScreenState extends State<InventoryScreen> {
       cells: [
         DataCell(Text(item['material'] ?? '')),
         DataCell(Text(item['sector'] ?? 'Unassigned')),
-        DataCell(Text(item['floor'] ?? '-')), // <-- Added Floor Cell
+        DataCell(Text(item['floor'] ?? '-')),
         DataCell(Text('${item['quantity']} ${item['unit']}')),
         DataCell(Text(item['date_used'] ?? '')),
         DataCell(
-          IconButton(
-            icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-            tooltip: 'Delete Log',
-            onPressed: () => _deleteConsumedItem(item['id']?.toString()),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
+                tooltip: 'Edit Log',
+                onPressed: () => _showAddConsumedDialog(existingItem: item),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                tooltip: 'Delete Log',
+                onPressed: () => _deleteConsumedItem(item['id']?.toString()),
+              ),
+            ],
           ),
         ),
       ],

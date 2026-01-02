@@ -10,6 +10,7 @@ import 'package:visionvolcan_site_app/services/expense_service.dart';
 import 'package:visionvolcan_site_app/theme/app_colors.dart';
 import 'package:intl/intl.dart';
 import 'package:visionvolcan_site_app/services/inventory_service.dart'; // We need this to get suggestions!
+import 'dart:async';
 
 class ExpenseScreen extends StatefulWidget {
   final Map<String, dynamic> siteData;
@@ -54,6 +55,8 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
     ).toList();
   }
 
+  StreamSubscription? _purchaseSubscription;
+
   // Controllers
   final _materialController = TextEditingController();
   final _sectorController = TextEditingController();
@@ -75,8 +78,23 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
     super.initState();
     _refreshPurchases();
     _refreshContractors();
-    // --- NEW: Load suggestions when screen opens ---
     _loadSuggestions();
+
+    // --- LIVE UPDATES START ---
+    // Ye humesha database ke 'raw_material_purchases' table ko sunta rahega
+    _purchaseSubscription = ExpenseService.instance
+        .materialPurchasesStream(widget.siteData['id']!)
+        .listen((List<Map<String, dynamic>> updatedData) {
+
+
+      if (mounted) {
+        setState(() {
+          _purchasedItems = updatedData;
+        });
+        _loadSuggestions();
+      }
+    });
+    // --- LIVE UPDATES END ---
 
     _searchController.addListener(() {
       setState(() {
@@ -137,43 +155,51 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
-              onPressed: () {
-                final amountStr = payAmountController.text.trim();
-                if (amountStr.isEmpty) return;
+        onPressed: () async {
+        final amountStr = payAmountController.text.trim();
+        if (amountStr.isEmpty) return;
+        final double newPayment = double.tryParse(amountStr) ?? 0;
 
-                final double newPayment = double.tryParse(amountStr) ?? 0;
+        double currentPending = (contractor['pendingRaw'] as num?)?.toDouble() ?? 0.0;
+        if (newPayment > currentPending) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Error: You cannot pay more than the pending amount!'), backgroundColor: Colors.red),
+          );
+          return;
+        }
 
-                // 1. Get Current Values
-                double total = (contractor['totalRaw'] as num?)?.toDouble() ?? 0.0;
-                double oldPaid = (contractor['paidRaw'] as num?)?.toDouble() ?? 0.0;
+        // 1. Get Current Total Contract Value
+        double totalContract = (contractor['totalRaw'] as num?)?.toDouble() ?? 0.0;
 
-                // 2. Calculate New Totals
-                double newPaidTotal = oldPaid + newPayment;
-                double newPending = total - newPaidTotal;
+        // 2. Nayi installment ko purani list mein add karo
+        List<dynamic> history = List.from(contractor['installmentsData'] ?? []);
+        history.add({
+        'amount': newPayment.toStringAsFixed(0),
+        'date': payDateController.text,
+        'status': 'paid'
+        });
 
-                // 3. Update History List
-                List<dynamic> history = List.from(contractor['installmentsData'] ?? []);
-                history.add({
-                  'amount': newPayment.toStringAsFixed(0),
-                  'date': payDateController.text,
-                  'status': 'paid' // Mark as paid for the log
-                });
+        // 3. RECALCULATE Total Paid directly from history list (Discrepancy solve karne ke liye)
+        double recalculatedPaidTotal = history.fold(0.0, (sum, item) =>
+        sum + (double.tryParse(item['amount'].toString()) ?? 0.0));
 
-                // 4. Create Update Object
-                final updatedContractor = {
-                  'site_id': widget.siteData['id']!,
-                  'name': contractor['name'],
-                  'sector': contractor['sector'],
-                  'total': total.toStringAsFixed(0),
-                  'paid': newPaidTotal.toStringAsFixed(0),
-                  'pending': newPending.toStringAsFixed(0),
-                  'installments': history,
-                };
+        double newPending = totalContract - recalculatedPaidTotal;
 
-                // 5. Save to Database
-                if (contractor['id'] != null) {
-                  ExpenseService.instance.updateContractor(contractor['id'].toString(), updatedContractor);
-                }
+        final updatedContractor = {
+        'site_id': widget.siteData['id']!,
+        'name': contractor['name'],
+        'sector': contractor['sector'],
+        'total': totalContract.toStringAsFixed(0),
+        'paid': recalculatedPaidTotal.toStringAsFixed(0), // Exact calculation
+        'pending': newPending.toStringAsFixed(0),
+        'installments': history,
+        };
+
+        // ... save to database ...
+        if (contractor['id'] != null) {
+          await ExpenseService.instance.updateContractor(contractor['id'].toString(), updatedContractor);
+        }
+
 
                 _refreshContractors();
                 Navigator.pop(context);
@@ -291,6 +317,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
 
   @override
   void dispose() {
+    _purchaseSubscription?.cancel();
     _nameController.dispose();
     _dateController.dispose();
     _quantityController.dispose();
@@ -422,15 +449,24 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
   }
 
   // --- NEW: Enhanced Dialog with Autocomplete ---
-  void _showAddPurchaseDialog() {
-    _materialController.clear();
-    _rateController.clear();
-    _quantityController.clear();
-    _dateController.text = DateFormat("dd MMM yyyy").format(DateTime.now());
+  void _showAddPurchaseDialog({Map<String, dynamic>? existingItem}) {
+    final isEdit = existingItem != null;
 
-    // This variable holds the value for the Sector Dropdown
-    String? selectedSector;
-    String selectedUnit = 'units';
+    // initialization logic (Ye wala 'else' sirf ek baar hi hai)
+    if (isEdit) {
+      _materialController.text = existingItem['material'] ?? '';
+      _rateController.text = existingItem['rate']?.toString() ?? '';
+      _quantityController.text = existingItem['quantity']?.toString() ?? '';
+      _dateController.text = existingItem['date_of_purchase'] ?? '';
+    } else {
+      _materialController.clear();
+      _rateController.clear();
+      _quantityController.clear();
+      _dateController.text = DateFormat("dd MMM yyyy").format(DateTime.now());
+    }
+
+    String? selectedSector = isEdit ? existingItem['sector'] : null;
+    String selectedUnit = isEdit ? (existingItem['unit'] ?? 'units') : 'units';
 
     showDialog(
       context: context,
@@ -438,70 +474,52 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
 
-            // Helper to handle material text changes/selection
             void onMaterialChanged(String val) {
-              // 1. Try to find exact match
-              String? matchedSector = _materialToSectorMap[val];
-
-              // 2. If no exact match, try case-insensitive match (e.g. user typed "cement" but map has "Cement")
+              String? matchedSector = _materialToSectorMap[val.trim()];
               if (matchedSector == null) {
                 final key = _materialToSectorMap.keys.firstWhere(
-                      (k) => k.toLowerCase() == val.toLowerCase(),
+                      (k) => k.toLowerCase() == val.trim().toLowerCase(),
                   orElse: () => '',
                 );
-                if (key.isNotEmpty) {
-                  matchedSector = _materialToSectorMap[key];
-                }
+                if (key.isNotEmpty) matchedSector = _materialToSectorMap[key];
               }
 
-              // 3. Update the Dropdown if we found a sector
-              if (matchedSector != null) {
-                // Ensure the sector exists in our dropdown list to avoid errors
-                if (_existingSectors.contains(matchedSector)) {
-                  setDialogState(() {
-                    selectedSector = matchedSector;
-                  });
-                }
+              if (matchedSector != null && _existingSectors.contains(matchedSector)) {
+                setDialogState(() {
+                  selectedSector = matchedSector;
+                });
               }
             }
 
             return AlertDialog(
-              title: const Text('Log New Material Purchase'),
+              title: Text(isEdit ? 'Update Purchase' : 'Log New Material Purchase'),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-
-                    // --- 1. Material Autocomplete ---
+                    // --- 1. Material Autocomplete (Fixed for Edit Mode) ---
                     Autocomplete<String>(
-                      optionsBuilder: (TextEditingValue textEditingValue) {
-                        if (textEditingValue.text == '') {
-                          return const Iterable<String>.empty();
-                        }
-                        return _existingMaterialNames.where((String option) {
-                          return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
-                        });
+                      // initialValue ensures text is visible when editing
+                      initialValue: TextEditingValue(text: _materialController.text),
+                      optionsBuilder: (textEditingValue) {
+                        if (textEditingValue.text.isEmpty) return const Iterable<String>.empty();
+                        return _existingMaterialNames.where((option) =>
+                            option.toLowerCase().contains(textEditingValue.text.toLowerCase()));
                       },
-                      onSelected: (String selection) {
+                      onSelected: (selection) {
                         _materialController.text = selection;
-                        onMaterialChanged(selection); // Check sector map immediately
+                        onMaterialChanged(selection);
                       },
-                      fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
-                        // Keep our main controller in sync
-                        if (_materialController.text.isNotEmpty && textEditingController.text.isEmpty) {
-                          textEditingController.text = _materialController.text;
-                        }
-
+                      fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
                         return TextField(
-                          controller: textEditingController,
+                          controller: textController,
                           focusNode: focusNode,
                           decoration: const InputDecoration(
-                            labelText: 'Material Name (e.g., Cement)',
+                            labelText: 'Material Name',
                             suffixIcon: Icon(Icons.arrow_drop_down),
                           ),
                           onChanged: (val) {
                             _materialController.text = val;
-                            // Check map as user types (in case they type exact name without clicking suggestion)
                             onMaterialChanged(val);
                           },
                         );
@@ -510,184 +528,119 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
 
                     const SizedBox(height: 16),
 
-                    // --- 2. Sector Dropdown (Forced Selection) ---
+                    // --- 2. Sector Dropdown (Safe Check added) ---
                     DropdownButtonFormField<String>(
-                      value: selectedSector,
-                      decoration: const InputDecoration(
-                        labelText: 'Sector',
-                        border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                      ),
+                      // value check prevents crash if sector is not in list
+                      value: _existingSectors.contains(selectedSector) ? selectedSector : null,
+                      decoration: const InputDecoration(labelText: 'Sector', border: OutlineInputBorder()),
                       hint: const Text("Select Sector"),
                       items: [
-                        // Option A: Existing Sectors
-                        ..._existingSectors.map((String sector) {
-                          return DropdownMenuItem<String>(
-                            value: sector,
-                            child: Text(sector),
-                          );
-                        }),
-                        // Option B: Special "Add New" option
-                        const DropdownMenuItem<String>(
+                        ..._existingSectors.map((s) => DropdownMenuItem(value: s, child: Text(s))),
+                        const DropdownMenuItem(
                           value: 'ADD_NEW_OPTION',
-                          child: Row(
-                            children: [
-                              Icon(Icons.add, color: Colors.blue, size: 18),
-                              SizedBox(width: 8),
-                              Text("Add New Sector...", style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
+                          child: Text("+ Add New Sector...", style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
                         ),
                       ],
-                      onChanged: (String? newValue) async {
+                      onChanged: (newValue) async {
                         if (newValue == 'ADD_NEW_OPTION') {
-                          // Open the small dialog to type name
-                          String? newCustomSector = await _showAddNewSectorDialog();
-                          if (newCustomSector != null) {
-                            // Add to global list and select it
-                            if (!_existingSectors.contains(newCustomSector)) {
-                              _existingSectors.add(newCustomSector);
-                              _existingSectors.sort(); // Optional: Keep alphabetical
+                          String? newSec = await _showAddNewSectorDialog();
+                          if (newSec != null) {
+                            if (!_existingSectors.contains(newSec)) {
+                              _existingSectors.add(newSec);
+                              _existingSectors.sort();
                             }
-                            setDialogState(() {
-                              selectedSector = newCustomSector;
-                            });
-                          } else {
-                            // If they cancelled, revert to previous or null
-                            setDialogState(() {
-                              // keep current selectedSector
-                            });
+                            setDialogState(() => selectedSector = newSec);
                           }
                         } else {
-                          // Normal selection
-                          setDialogState(() {
-                            selectedSector = newValue;
-                          });
+                          setDialogState(() => selectedSector = newValue);
                         }
                       },
                     ),
 
                     const SizedBox(height: 16),
+                    // Date Field
                     TextField(
                       controller: _dateController,
                       decoration: const InputDecoration(labelText: 'Date of Purchase', prefixIcon: Icon(Icons.calendar_today)),
                       readOnly: true,
                       onTap: () async {
-                        DateTime? pickedDate = await showDatePicker(
+                        DateTime? picked = await showDatePicker(
                           context: context,
                           initialDate: DateTime.now(),
                           firstDate: DateTime(2020),
                           lastDate: DateTime(2101),
                         );
-                        if (pickedDate != null) {
-                          setDialogState(() {
-                            _dateController.text = DateFormat("dd MMM yyyy").format(pickedDate);
-                          });
-                        }
+                        if (picked != null) setDialogState(() => _dateController.text = DateFormat("dd MMM yyyy").format(picked));
                       },
                     ),
                     const SizedBox(height: 16),
+                    // Quantity and Unit Row
                     Row(
                       children: [
-                        Expanded(
-                          flex: 2,
-                          child: TextField(
-                            controller: _quantityController,
-                            decoration: const InputDecoration(labelText: 'Quantity'),
-                            keyboardType: TextInputType.number,
-                          ),
-                        ),
+                        Expanded(flex: 2, child: TextField(controller: _quantityController, decoration: const InputDecoration(labelText: 'Quantity'), keyboardType: TextInputType.number)),
                         const SizedBox(width: 10),
-                        Expanded(
-                          flex: 3,
-                          child: DropdownButtonFormField<String>(
-                            value: selectedUnit,
-                            decoration: const InputDecoration(labelText: 'Unit'),
-                            items: ['units', 'bags', 'kg', 'ton', 'feet', 'meters', 'liters', 'boxes', 'bundles']
-                                .map((String value) {
-                              return DropdownMenuItem<String>(
-                                value: value,
-                                child: Text(value),
-                              );
-                            }).toList(),
-                            onChanged: (value) {
-                              if (value != null) {
-                                setDialogState(() {
-                                  selectedUnit = value;
-                                });
-                              }
-                            },
-                          ),
-                        ),
+                        Expanded(flex: 3, child: DropdownButtonFormField<String>(
+                          value: selectedUnit,
+                          decoration: const InputDecoration(labelText: 'Unit'),
+                          items: ['units', 'bags', 'kg', 'ton', 'feet', 'meters', 'liters', 'boxes', 'bundles'].map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
+                          onChanged: (v) => setDialogState(() => selectedUnit = v!),
+                        )),
                       ],
                     ),
                     const SizedBox(height: 16),
                     TextField(
                       controller: _rateController,
-                      decoration: const InputDecoration(
-                          labelText: 'Rate / Price (per unit)',
-                          prefixIcon: Text('₹', style: TextStyle(fontSize: 18))
-                      ),
+                      decoration: const InputDecoration(labelText: 'Rate / Price (per unit)', prefixIcon: Text('₹')),
                       keyboardType: TextInputType.number,
                     ),
                   ],
                 ),
               ),
               actions: <Widget>[
-                TextButton(
-                  child: const Text('Cancel'),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
+                TextButton(child: const Text('Cancel'), onPressed: () => Navigator.of(context).pop()),
                 ElevatedButton(
                   onPressed: () async {
                     try {
                       final material = _normalizeText(_materialController.text);
-                      // Use the dropdown variable, not the old controller
-                      final rawSector = selectedSector ?? '';
-                      final sector = _normalizeText(rawSector);
-                      final date = _dateController.text;
+                      final sector = _normalizeText(selectedSector ?? '');
                       final quantity = int.tryParse(_quantityController.text) ?? 0;
                       final rate = double.tryParse(_rateController.text) ?? 0.0;
 
-                      if (material.isEmpty || sector == "Uncategorized" || quantity <= 0 || rate <= 0){
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Please fill all fields (check Sector).'), backgroundColor: Colors.red),
-                        );
+                      if (material.isEmpty || sector == "Uncategorized" || quantity <= 0 || rate <= 0) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please fill all fields.'), backgroundColor: Colors.red));
                         return;
                       }
 
-                      final totalAmount = quantity * rate;
-
-                      final newPurchase = {
+                      final data = {
                         'site_id': widget.siteData['id']!,
                         'material': material,
                         'sector': sector,
-                        'date_of_purchase': date,
+                        'date_of_purchase': _dateController.text,
                         'quantity': quantity,
                         'unit': selectedUnit,
                         'rate': rate,
-                        'total_amount': totalAmount,
+                        'total_amount': quantity * rate,
                       };
 
-                      await ExpenseService.instance.addMaterialPurchase(newPurchase);
+                      if (isEdit) {
+                        await ExpenseService.instance.updateMaterialPurchase(existingItem['id'].toString(), data);
+                      } else {
+                        await ExpenseService.instance.addMaterialPurchase(data);
+                      }
 
+                      // Refresh and Close with Safety Check
+                      if (!mounted) return;
                       _refreshPurchases();
                       _loadSuggestions();
-
-                      if (!mounted) return;
                       Navigator.of(context).pop();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Purchase logged successfully!'), backgroundColor: Colors.green),
-                      );
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Saved Successfully!'), backgroundColor: Colors.green));
 
                     } catch (e) {
                       if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-                      );
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
                     }
                   },
-                  child: const Text('Add Purchase'),
+                  child: Text(isEdit ? 'Update' : 'Add Purchase'),
                 ),
               ],
             );
@@ -779,7 +732,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                 foregroundColor: Colors.white,
               ),
               child: Text(isEdit ? 'Update' : 'Add'),
-              onPressed: () {
+              onPressed: () async {
                 final name = _normalizeText(_nameController.text);
                 final sector = _normalizeText(_contractorSectorController.text);
                 final totalStr = _totalAmountController.text.trim();
@@ -788,9 +741,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                   final totalAmount = double.tryParse(totalStr) ?? 0;
 
                   // For new contractors, paid starts at 0. For edit, keep existing paid.
-                  final currentPaid = isEdit
-                      ? (double.tryParse(contractor['paid']?.toString().replaceAll(RegExp(r'[^0-9.]'), '') ?? '0') ?? 0)
-                      : 0.0;
+                  final currentPaid = isEdit ? (contractor['paidRaw'] as num).toDouble() : 0.0;
 
                   final pendingAmount = totalAmount - currentPaid;
 
@@ -810,9 +761,9 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                   };
 
                   if (isEdit && contractor['id'] != null) {
-                    ExpenseService.instance.updateContractor(contractor['id'].toString(), newContractor);
+                   await ExpenseService.instance.updateContractor(contractor['id'].toString(), newContractor);
                   } else {
-                    ExpenseService.instance.addContractor(newContractor);
+                    await ExpenseService.instance.addContractor(newContractor);
                   }
 
                   _refreshContractors();
@@ -832,17 +783,24 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
 
   Future<void> _refreshContractors() async {
     final contractorsData = await ExpenseService.instance.getContractorsForSite(widget.siteData['id']!);
+
+    contractorsData.sort((a, b) {
+      int idA = int.tryParse(a['id'].toString()) ?? 0;
+      int idB = int.tryParse(b['id'].toString()) ?? 0;
+      return idB.compareTo(idA); // Latest ID (Newest contractor) hamesha top par rahega
+    });
+
+
     setState(() {
       _contractors = contractorsData.map((contractor) {
         final total = double.tryParse(contractor['total']?.toString() ?? '0') ?? 0;
         final paid = double.tryParse(contractor['paid']?.toString() ?? '0') ?? 0;
         final pending = double.tryParse(contractor['pending']?.toString() ?? '0') ?? 0;
 
-        // ... (Installment parsing logic remains same) ...
         final dynamic installs = contractor['installments'];
         List<dynamic> installmentsList = [];
         if (installs is String) {
-          // logic...
+          // parsing logic...
         } else if (installs is List) {
           installmentsList = installs;
         }
@@ -855,15 +813,13 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
           'name': contractor['name']?.toString() ?? '',
           'sector': contractor['sector']?.toString() ?? '',
 
-          // --- CHANGE START: Store Raw Values for Math ---
-          'totalRaw': total,    // Store 100000.0
-          'paidRaw': paid,      // Store 40000.0
-          'pendingRaw': pending,// Store 60000.0
-          // ---------------------------------------------
+          'totalRaw': total,
+          'paidRaw': paid,
+          'pendingRaw': pending,
 
-          'total': '₹${_formatNumber(total)}', // Display: ₹1.0L
-          'paid': '₹${_formatNumber(paid)}',   // Display: ₹40.0K
-          'pending': '₹${_formatNumber(pending)}', // Display: ₹60.0K
+          'total': '₹${_formatNumber(total)}',
+          'paid': '₹${_formatNumber(paid)}',
+          'pending': '₹${_formatNumber(pending)}',
 
           'installmentsCount': installmentsCount.toString(),
           'installmentsPaid': paidInstallments.toString(),
@@ -1062,7 +1018,17 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
   }
 
   void _showContractorInstallmentsDialog(Map<String, dynamic> contractor) {
-    final installments = contractor['installmentsData'] as List<dynamic>? ?? [];
+    // 1. Get exact raw values for the summary
+    double exactPaid = (contractor['paidRaw'] as num?)?.toDouble() ?? 0.0;
+    double exactPending = (contractor['pendingRaw'] as num?)?.toDouble() ?? 0.0;
+
+    // 2. Prepare history list and sort by date (Newest on top)
+    List<dynamic> installments = List.from(contractor['installmentsData'] ?? []);
+    installments.sort((a, b) {
+      DateTime dateA = _parseDate(a['date'] ?? '');
+      DateTime dateB = _parseDate(b['date'] ?? '');
+      return dateB.compareTo(dateA);
+    });
 
     showDialog(
       context: context,
@@ -1074,57 +1040,102 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (installments.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(24.0),
-                    child: Text(
-                      'No payments recorded yet.',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  )
-                else
-                  Flexible(
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: installments.length,
-                      itemBuilder: (context, index) {
-                        // Show newest first? (Optional: reverse index)
-                        final payment = installments[installments.length - 1 - index];
-                        final amount = double.tryParse(payment['amount']?.toString() ?? '0') ?? 0;
-
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          color: Colors.green.shade50,
-                          child: ListTile(
-                            leading: const CircleAvatar(
-                              backgroundColor: Colors.green,
-                              radius: 16,
-                              child: Icon(Icons.check, color: Colors.white, size: 16),
-                            ),
-                            title: Text(
-                              '₹${_formatNumber(amount)}',
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            subtitle: Text(
-                              payment['date'] ?? '',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
+                // --- EXACT SUMMARY HEADER ---
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
                   ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildExactStat('Total Paid', '₹${exactPaid.toStringAsFixed(0)}', Colors.green),
+                      _buildExactStat('Pending', '₹${exactPending.toStringAsFixed(0)}', Colors.orange),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Divider(),
+
+                // --- LIST OF PAYMENTS ---
+                installments.isEmpty
+                    ? const Padding(padding: EdgeInsets.all(20), child: Text("No history found"))
+                    : Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: installments.length,
+                    itemBuilder: (context, index) {
+                      final histPayment = installments[index];
+                      // Get exact amount as string without 'K' or 'L'
+                      final double histAmount = double.tryParse(histPayment['amount']?.toString() ?? '0') ?? 0;
+
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        color: Colors.green.shade50,
+                        child: ListTile(
+                          title: Text(
+                            '₹${histAmount.toStringAsFixed(0)}', // SHOWS EXACT AMOUNT
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          ),
+                          subtitle: Text(histPayment['date'] ?? ''),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                            onPressed: () async {
+                              // 1. Get Total Contract Value (Raw)
+                              double totalVal = (contractor['totalRaw'] as num?)?.toDouble() ?? 0.0;
+
+                              // 2. Nayi list banayein aur usmein se current item delete karein
+                              List<dynamic> updatedHistory = List.from(contractor['installmentsData']);
+                              updatedHistory.removeWhere((item) =>
+                              item['amount'] == histPayment['amount'] && item['date'] == histPayment['date']);
+
+                              // 3. 1 Rupee Error Fix: Pure list ka fresh sum nikalein
+                              double recalculatedPaidTotal = updatedHistory.fold(0.0, (sum, item) =>
+                              sum + (double.tryParse(item['amount'].toString()) ?? 0.0));
+
+                              double newPending = totalVal - recalculatedPaidTotal;
+
+                              // 4. Database update karein
+                              await ExpenseService.instance.updateContractor(contractor['id'].toString(), {
+                                'paid': recalculatedPaidTotal.toStringAsFixed(0),
+                                'pending': newPending.toStringAsFixed(0),
+                                'installments': updatedHistory,
+                              });
+
+                              if (!mounted) return;
+
+                              // 5. UI Refresh aur Dialog close
+                              _refreshContractors();
+                              Navigator.pop(context);
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Payment deleted & balance recalculated'), backgroundColor: Colors.orange),
+                              );
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
               ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
+          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
         );
       },
+    );
+  }
+
+// Helper Widget for the Exact Summary at the top of the Dialog
+  Widget _buildExactStat(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+        const SizedBox(height: 4),
+        Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
+      ],
     );
   }
 
@@ -1432,11 +1443,20 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                           style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
                         )),
                         DataCell(
-                          IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-                            onPressed: () {
-                              _confirmDeletePurchase(item);
-                            },
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
+                                onPressed: () {
+                                  _showAddPurchaseDialog(existingItem: item);
+                                },
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                                onPressed: () => _confirmDeletePurchase(item),
+                              ),
+                            ],
                           ),
                         ),
                       ],

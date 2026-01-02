@@ -1,37 +1,25 @@
 import 'package:visionvolcan_site_app/main.dart';
+import 'package:visionvolcan_site_app/services/cache_service.dart';
 
 class InventoryService {
   InventoryService._();
   static final InventoryService instance = InventoryService._();
 
-  // =======================================================
-  // 📈 NEW FUNCTIONS FOR THE "INVENTORY" SCREEN
-  // =======================================================
 
-  // NEW: Gets all purchases from the 'raw_material_purchases' table
-  // This is used by InventoryScreen to calculate "Total Bought".
-  Future<List<Map<String, dynamic>>> getAllPurchases(int siteId) async {
-    final response = await supabase
-        .from('raw_material_purchases')
-        .select()
-        .eq('site_id', siteId);
-    return List<Map<String, dynamic>>.from(response as List);
+  Future<List<Map<String, dynamic>>> getAllPurchases(int siteId, {bool forceRefresh = false}) async {
+    return await CacheService.instance.getMaterialPurchasesForSite(siteId, forceRefresh: forceRefresh);
   }
 
   // NEW: Gets all consumed logs from the 'material_consumed' table
   // This is used by InventoryScreen to calculate "Total Used".
-  Future<List<Map<String, dynamic>>> getAllConsumed(int siteId) async {
-    final response = await supabase
-        .from('material_consumed')
-        .select()
-        .eq('site_id', siteId);
-    return List<Map<String, dynamic>>.from(response as List);
+  Future<List<Map<String, dynamic>>> getAllConsumed(int siteId, {bool forceRefresh = false}) async {
+    return await CacheService.instance.getMaterialConsumedForSite(siteId, forceRefresh: forceRefresh);
   }
 
   // NEW: Adds a new "usage" log to the 'material_consumed' table
   // This is called when you press the "+" button on the "Consumed" tab.
   Future<void> logMaterialUsage(Map<String, dynamic> item) async {
-    await supabase.from('material_consumed').insert(item);
+    await CacheService.instance.logMaterialUsage(item);
   }
 
   // NEW: Deletes a "usage" log from the 'material_consumed' table
@@ -93,4 +81,21 @@ class InventoryService {
   }) async {
     // This function is no longer used.
   }
+
+
+  //update function
+  Future<void> updateConsumedLog(String id, Map<String, dynamic> data) async {
+    try {
+      await supabase
+          .from('material_consumed')
+          .update(data)
+          .eq('id', id);
+
+      print("Log updated successfully in database");
+    } catch (e) {
+      print("Error updating consumed log: $e");
+      rethrow;
+    }
+  }
+
 }

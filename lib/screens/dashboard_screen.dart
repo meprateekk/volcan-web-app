@@ -14,6 +14,7 @@ import 'package:visionvolcan_site_app/screens/site_list_screen.dart';
 import 'package:visionvolcan_site_app/services/expense_service.dart';
 import 'package:visionvolcan_site_app/services/site_service.dart';
 import 'package:visionvolcan_site_app/services/inventory_service.dart';
+import 'package:visionvolcan_site_app/services/cache_service.dart';
 
 
 class DashboardScreen extends StatefulWidget {
@@ -410,8 +411,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh Data',
-            onPressed: () {
+            onPressed: () async {
+              // Show loading indicator
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Row(
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      ),
+                      SizedBox(width: 16),
+                      Text('Refreshing data...'),
+                    ],
+                  ),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+              
+              // Force refresh cache for this site (if available)
+              try {
+                await CacheService.instance.refreshSiteData(widget.siteData['id']);
+              } catch (e) {
+                // Cache refresh failed, but continue with data reload
+                print('Cache refresh failed: $e');
+              }
+              
+              // Reload expense data
               _loadExpenseData();
+              
+              // Show success message
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Data refreshed successfully'),
+                    backgroundColor: Colors.green,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              }
             },
           ),
           PopupMenuButton<String>(

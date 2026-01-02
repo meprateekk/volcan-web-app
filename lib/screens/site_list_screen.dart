@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:visionvolcan_site_app/theme/app_colors.dart';
 import 'package:visionvolcan_site_app/screens/main_screen.dart';
 import 'package:visionvolcan_site_app/services/site_service.dart';
+import 'package:visionvolcan_site_app/services/cache_service.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:visionvolcan_site_app/screens/login_screen.dart';
@@ -144,6 +146,18 @@ class _SiteListScreenState extends State<SiteListScreen> {
                     Icon(Icons.help_outline, color: Colors.black54), // Use a relevant icon
                     SizedBox(width: 8),
                     Text('Help'),
+                  ],
+                ),
+              ),
+
+              //cache management button
+              const PopupMenuItem(
+                value: 'cache_management',
+                child: Row(
+                  children: [
+                    Icon(Icons.storage, color: Colors.black54), // Use a relevant icon
+                    SizedBox(width: 8),
+                    Text('Cache Management'),
                   ],
                 ),
               ),
@@ -496,6 +510,9 @@ class _SiteListScreenState extends State<SiteListScreen> {
       case 'help':
         _showHelpScreen(); // Build another screen on-the-fly
         break;
+      case 'cache_management':
+        _showCacheManagementDialog(); // Show cache management dialog
+        break;
       case 'logout':
         _logout();
         break;
@@ -513,6 +530,134 @@ class _SiteListScreenState extends State<SiteListScreen> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // NEW: "Cache Management" Dialog
+  void _showCacheManagementDialog() async {
+    final cacheStats = await CacheService.instance.getCacheStats();
+    
+    if (!mounted) return;
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cache Management'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Cache Statistics:', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text('Sites: ${cacheStats['sites']}'),
+            Text('Material Purchases: ${cacheStats['material_purchases']}'),
+            Text('Contractors: ${cacheStats['contractors']}'),
+            Text('Material Consumed: ${cacheStats['material_consumed']}'),
+            const SizedBox(height: 8),
+            Text(
+              'Platform: ${cacheStats['platform']}',
+              style: const TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
+            ),
+            const SizedBox(height: 16),
+            if (cacheStats['platform'] == 'web (cache not available)')
+              const Text(
+                'Cache is not available on web platform. All data is fetched directly from the server.',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              )
+            else
+              const Text(
+                'Cache stores data locally for faster access and offline use.',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+          ],
+        ),
+        actions: [
+          if (cacheStats['platform'] != 'web (cache not available)') ...[
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                // Force refresh all sites
+                try {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Row(
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          ),
+                          SizedBox(width: 16),
+                          Text('Refreshing all data...'),
+                        ],
+                      ),
+                      duration: Duration(seconds: 3),
+                    ),
+                  );
+                  
+                  await SiteService.instance.getSites(forceRefresh: true);
+                  
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('All data refreshed successfully'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                    setState(() {}); // Refresh the UI
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error refreshing data: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text('Refresh All'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                // Clear cache
+                try {
+                  await CacheService.instance.clearCache();
+                  
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Cache cleared successfully'),
+                        backgroundColor: Colors.orange,
+                      ),
+                    );
+                    setState(() {}); // Refresh the UI
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error clearing cache: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text('Clear Cache', style: TextStyle(color: Colors.orange)),
+            ),
+          ],
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
           ),
         ],
       ),
@@ -1182,6 +1327,29 @@ class _SiteListScreenState extends State<SiteListScreen> {
 
 
 
+class UpperCaseTextFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final words = newValue.text.split(' ');
+    final capitalizedWords = words.map((word) {
+      if (word.isEmpty) return word;
+      return word[0].toUpperCase() + word.substring(1).toLowerCase();
+    }).join(' ');
+    
+    return TextEditingValue(
+      text: capitalizedWords,
+      selection: newValue.selection.copyWith(
+        baseOffset: capitalizedWords.length,
+        extentOffset: capitalizedWords.length,
+      ),
+    );
+  }
+}
+
+
 class _AddSiteDialogContent extends StatefulWidget {
   final TextEditingController siteNameController;
   final TextEditingController locationController;
@@ -1215,10 +1383,12 @@ class _AddSiteDialogContentState extends State<_AddSiteDialogContent> {
           TextField(
             controller: widget.siteNameController,
             decoration: const InputDecoration(labelText: 'Site Name'),
+            inputFormatters: [UpperCaseTextFormatter()],
           ),
           TextField(
             controller: widget.locationController,
             decoration: const InputDecoration(labelText: 'Location'),
+            inputFormatters: [UpperCaseTextFormatter()],
           ),
           TextField(
             controller: widget.plotSizeController,
