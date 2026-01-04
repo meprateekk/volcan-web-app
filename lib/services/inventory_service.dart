@@ -1,5 +1,28 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:visionvolcan_site_app/main.dart';
 import 'package:visionvolcan_site_app/services/cache_service.dart';
+
+/// Simple logger for better error handling
+class AppLogger {
+  static void log(String message, {String? error}) {
+    if (kDebugMode) {
+      if (error != null) {
+        print('ERROR: $message - $error');
+      } else {
+        print('INFO: $message');
+      }
+    }
+  }
+  
+  static void error(String message, {dynamic error}) {
+    if (kDebugMode) {
+      print('ERROR: $message');
+      if (error != null) {
+        print('DETAILS: $error');
+      }
+    }
+  }
+}
 
 class InventoryService {
   InventoryService._();
@@ -91,9 +114,9 @@ class InventoryService {
           .update(data)
           .eq('id', id);
 
-      print("Log updated successfully in database");
+      AppLogger.log("Log updated successfully in database");
     } catch (e) {
-      print("Error updating consumed log: $e");
+      AppLogger.error("Error updating consumed log", error: e);
       rethrow;
     }
   }

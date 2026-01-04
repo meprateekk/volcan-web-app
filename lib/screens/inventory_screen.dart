@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:async'; // Added for Timer
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:file_saver/file_saver.dart';
@@ -30,6 +31,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
   bool _showStock = true;
+  Timer? _searchTimer; // Added for debounced search
 
   List<Map<String, dynamic>> _stockItems = [];
   List<Map<String, dynamic>> _consumedItems = [];
@@ -41,6 +43,18 @@ class _InventoryScreenState extends State<InventoryScreen> {
   void initState() {
     super.initState();
     _refreshInventory();
+    
+    // Add debounced search listener
+    _searchController.addListener(() {
+      _searchTimer?.cancel();
+      _searchTimer = Timer(const Duration(milliseconds: 300), () {
+        if (mounted) {
+          setState(() {
+            _searchQuery = _searchController.text;
+          });
+        }
+      });
+    });
   }
 
   List<Map<String, dynamic>> get _filteredItems {
@@ -128,11 +142,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     )
                         : null,
                   ),
-                  onChanged: (value) {
-                    setState(() {
-                      _searchQuery = value;
-                    });
-                  },
                 ),
               ),
               const SizedBox(height: 16),

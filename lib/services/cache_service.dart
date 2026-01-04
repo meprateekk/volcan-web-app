@@ -1,10 +1,32 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:sqflite/sqflite.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'package:visionvolcan_site_app/main.dart';
+
+/// Simple logger for better error handling
+class AppLogger {
+  static void log(String message, {String? error}) {
+    if (kDebugMode) {
+      if (error != null) {
+        print('ERROR: $message - $error');
+      } else {
+        print('INFO: $message');
+      }
+    }
+  }
+  
+  static void error(String message, {dynamic error}) {
+    if (kDebugMode) {
+      print('ERROR: $message');
+      if (error != null) {
+        print('DETAILS: $error');
+      }
+    }
+  }
+}
 
 /// Offline-first caching service for the VisionVolcan Site App
 /// Provides local storage and synchronization with Supabase
@@ -44,7 +66,7 @@ class CacheService {
       
       _isInitialized = true;
     } catch (e) {
-      print('Failed to initialize cache database: $e');
+      AppLogger.error('Failed to initialize cache database', error: e);
       _isInitialized = false;
     }
   }

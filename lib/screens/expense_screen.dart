@@ -2,7 +2,7 @@ import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:file_saver/file_saver.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -11,6 +11,28 @@ import 'package:visionvolcan_site_app/theme/app_colors.dart';
 import 'package:intl/intl.dart';
 import 'package:visionvolcan_site_app/services/inventory_service.dart'; // We need this to get suggestions!
 import 'dart:async';
+
+/// Simple logger for better error handling
+class AppLogger {
+  static void log(String message, {String? error}) {
+    if (kDebugMode) {
+      if (error != null) {
+        print('INFO: $message - $error');
+      } else {
+        print('INFO: $message');
+      }
+    }
+  }
+  
+  static void error(String message, {dynamic error}) {
+    if (kDebugMode) {
+      print('ERROR: $message');
+      if (error != null) {
+        print('DETAILS: $error');
+      }
+    }
+  }
+}
 
 class ExpenseScreen extends StatefulWidget {
   final Map<String, dynamic> siteData;
@@ -29,6 +51,7 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   bool _sortByDateAscending = true;
+  Timer? _searchTimer; // Added for debounced search
 
   List<Map<String, dynamic>> _purchasedItems = [];
   List<Map<String, dynamic>> _contractors = [];
@@ -97,8 +120,14 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
     // --- LIVE UPDATES END ---
 
     _searchController.addListener(() {
-      setState(() {
-        _searchQuery = _searchController.text;
+      // Debounced search to reduce excessive rebuilds
+      _searchTimer?.cancel();
+      _searchTimer = Timer(const Duration(milliseconds: 300), () {
+        if (mounted) {
+          setState(() {
+            _searchQuery = _searchController.text;
+          });
+        }
       });
     });
   }
@@ -258,17 +287,17 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
 
   // Helper method to update sector based on material
   void _updateSectorFromMaterial(String material) {
-    print('Updating sector for material: $material');
-    print('Available materials in map: ${_materialToSectorMap.keys.toList()}');
+    AppLogger.log('Updating sector for material: $material');
+    AppLogger.log('Available materials in map: ${_materialToSectorMap.keys.toList()}');
     
     if (_materialToSectorMap.containsKey(material)) {
       final sector = _materialToSectorMap[material]!;
-      print('Found matching sector: $sector');
+      AppLogger.log('Found matching sector: $sector');
       _sectorController.text = sector;
       // Force rebuild to show the updated sector
       if (mounted) setState(() {});
     } else {
-      print('No matching sector found for material: $material');
+      AppLogger.log('No matching sector found for material: $material');
       _sectorController.clear();
       if (mounted) setState(() {});
     }
@@ -306,17 +335,18 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
       _existingSectors = sectorSet.toList();
       
       // Debug output
-      print('Material to Sector Map:');
+      AppLogger.log('Material to Sector Map:');
       _materialToSectorMap.forEach((key, value) {
-        print('$key -> $value');
+        AppLogger.log('$key -> $value');
       });
-      print('Total materials: ${_existingMaterialNames.length}');
-      print('Total sectors: ${_existingSectors.length}');
+      AppLogger.log('Total materials: ${_existingMaterialNames.length}');
+      AppLogger.log('Total sectors: ${_existingSectors.length}');
     });
   }
 
   @override
   void dispose() {
+    _searchTimer?.cancel(); // Cancel timer to prevent memory leaks
     _purchaseSubscription?.cancel();
     _nameController.dispose();
     _dateController.dispose();

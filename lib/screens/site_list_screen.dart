@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:async'; // Added for Timer
 import 'package:intl/intl.dart';
 import 'package:visionvolcan_site_app/theme/app_colors.dart';
 import 'package:visionvolcan_site_app/screens/main_screen.dart';
@@ -29,6 +30,8 @@ class _SiteListScreenState extends State<SiteListScreen> {
   late TextEditingController _startDateController;
   late TextEditingController _completionDateController;
 
+  Timer? _searchTimer;
+  
   @override
   void initState() {
     super.initState();
@@ -39,14 +42,21 @@ class _SiteListScreenState extends State<SiteListScreen> {
     _startDateController = TextEditingController();
     _completionDateController = TextEditingController();
     _searchController.addListener(() {
-      setState(() {
-        _searchQuery = _searchController.text;
+      // Debounced search to reduce excessive rebuilds
+      _searchTimer?.cancel();
+      _searchTimer = Timer(const Duration(milliseconds: 300), () {
+        if (mounted) {
+          setState(() {
+            _searchQuery = _searchController.text;
+          });
+        }
       });
     });
   }
 
   @override
   void dispose() {
+    _searchTimer?.cancel(); // Cancel timer to prevent memory leaks
     _siteNameController.dispose();
     _locationController.dispose();
     _plotSizeController.dispose();
