@@ -12,6 +12,94 @@ import 'package:share_plus/share_plus.dart';
 import 'package:visionvolcan_site_app/services/inventory_service.dart';
 import 'package:visionvolcan_site_app/theme/app_colors.dart';
 
+/// Unit conversion helper for material quantities
+class UnitConverter {
+  static const Map<String, double> _unitConversions = {
+    // Weight conversions (base unit: kg)
+    'kg': 1.0,
+    'kilogram': 1.0,
+    'kilograms': 1.0,
+    'g': 0.001,
+    'gram': 0.001,
+    'grams': 0.001,
+    'ton': 1000.0,
+    'tonne': 1000.0,
+    'tons': 1000.0,
+    'quintal': 100.0,
+    
+    // Length conversions (base unit: meter)
+    'm': 1.0,
+    'meter': 1.0,
+    'meters': 1.0,
+    'cm': 0.01,
+    'centimeter': 0.01,
+    'centimeters': 0.01,
+    'mm': 0.001,
+    'millimeter': 0.001,
+    'millimeters': 0.001,
+    'ft': 0.3048,
+    'foot': 0.3048,
+    'feet': 0.3048,
+    'inch': 0.0254,
+    'inches': 0.0254,
+    
+    // Volume conversions (base unit: liter)
+    'l': 1.0,
+    'liter': 1.0,
+    'liters': 1.0,
+    'ml': 0.001,
+    'milliliter': 0.001,
+    'milliliters': 0.001,
+    'gallon': 3.78541,
+    'gallons': 3.78541,
+    
+    // Count units (base unit: pieces)
+    'pcs': 1.0,
+    'pieces': 1.0,
+    'piece': 1.0,
+    'units': 1.0,
+    'unit': 1.0,
+    'nos': 1.0,
+    'numbers': 1.0,
+    'bags': 1.0,
+    'bag': 1.0,
+    'bricks': 1.0,
+    'brick': 1.0,
+  };
+  
+  static double convertToBaseUnit(double quantity, String unit) {
+    final normalizedUnit = unit.toLowerCase().trim();
+    final conversionFactor = _unitConversions[normalizedUnit] ?? 1.0;
+    return quantity * conversionFactor;
+  }
+  
+  static String getBaseUnit(String unit) {
+    final normalizedUnit = unit.toLowerCase().trim();
+    
+    // Weight units
+    if (['kg', 'kilogram', 'kilograms', 'g', 'gram', 'grams', 'ton', 'tonne', 'tons', 'quintal'].contains(normalizedUnit)) {
+      return 'kg';
+    }
+    
+    // Length units
+    if (['m', 'meter', 'meters', 'cm', 'centimeter', 'centimeters', 'mm', 'millimeter', 'millimeters', 'ft', 'foot', 'feet', 'inch', 'inches'].contains(normalizedUnit)) {
+      return 'm';
+    }
+    
+    // Volume units
+    if (['l', 'liter', 'liters', 'ml', 'milliliter', 'milliliters', 'gallon', 'gallons'].contains(normalizedUnit)) {
+      return 'l';
+    }
+    
+    // Default to pieces for count units
+    return 'pcs';
+  }
+  
+  static bool areCompatibleUnits(String unit1, String unit2) {
+    return getBaseUnit(unit1) == getBaseUnit(unit2);
+  }
+}
+
 class InventoryScreen extends StatefulWidget {
   final Map<String, dynamic> siteData;
 
@@ -457,8 +545,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     const SizedBox(height: 16),
                     TextField(
                       controller: _quantityController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Quantity Used', border: OutlineInputBorder()),
+                      keyboardType: TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: 'Quantity Used (${_selectedStockItemForUsage?['unit'] ?? 'units'})',
+                        border: OutlineInputBorder(),
+                        helperText: _selectedStockItemForUsage != null ? 
+                          'Available: ${_selectedStockItemForUsage!['quantity']} ${_selectedStockItemForUsage!['unit']}' : null,
+                      ),
                     ),
                     const SizedBox(height: 16),
                     TextField(
@@ -480,12 +573,28 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: Palette.primaryBlue, foregroundColor: Colors.white),
                   onPressed: _selectedStockItemForUsage == null ? null : () async {
-                    final qtyUsed = int.tryParse(_quantityController.text) ?? 0;
+                    final qtyUsed = double.tryParse(_quantityController.text) ?? 0;
+                    final availableQty = (_selectedStockItemForUsage!['quantity'] as num?)?.toDouble() ?? 0;
+                    final availableUnit = _selectedStockItemForUsage!['unit']?.toString() ?? 'units';
 
-                    // Validation
-                    if (qtyUsed <= 0 || qtyUsed > _selectedStockItemForUsage!['quantity']) {
+                    // Unit conversion validation
+                    if (qtyUsed <= 0) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Invalid quantity. Max available: ${_selectedStockItemForUsage!['quantity']}'), backgroundColor: Colors.red),
+                        const SnackBar(content: Text('Quantity must be greater than 0'), backgroundColor: Colors.red),
+                      );
+                      return;
+                    }
+
+                    // Convert both quantities to base unit for comparison
+                    final availableInBaseUnit = UnitConverter.convertToBaseUnit(availableQty, availableUnit);
+                    final usedInBaseUnit = UnitConverter.convertToBaseUnit(qtyUsed, availableUnit);
+
+                    if (usedInBaseUnit > availableInBaseUnit) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Invalid quantity. Max available: ${availableQty.toStringAsFixed(2)} $availableUnit (${availableInBaseUnit.toStringAsFixed(2)} ${UnitConverter.getBaseUnit(availableUnit)})'),
+                          backgroundColor: Colors.red,
+                        ),
                       );
                       return;
                     }
