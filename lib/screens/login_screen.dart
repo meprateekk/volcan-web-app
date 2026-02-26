@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:visionvolcan_site_app/screens/site_list_screen.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:visionvolcan_site_app/main.dart';
 
 class LoginScreen extends StatefulWidget{

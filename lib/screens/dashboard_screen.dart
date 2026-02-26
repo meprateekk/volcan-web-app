@@ -40,6 +40,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _loadExpenseData();
   }
 
+  List<dynamic> _parseInstallments(Map<String, dynamic> item) {
+    final raw = item['installments'] ?? item['installmentsData'];
+    if (raw == null) return [];
+    if (raw is List) return raw;
+    if (raw is String) {
+      try {
+        final decoded = jsonDecode(raw);
+        return decoded is List ? decoded : [];
+      } catch (_) {
+        return [];
+      }
+    }
+    return [];
+  }
+
   // --- *** STEP 2: REBUILD _loadExpenseData TO USE NEW LOGIC *** ---
   Future<void> _loadExpenseData() async {
     // 1. Fetch from the CORRECT tables
@@ -950,8 +965,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final paid = double.tryParse(item['paid']?.toString() ?? '0') ?? 0.0;
     final pending = double.tryParse(item['pending']?.toString() ?? '0') ?? 0.0;
 
-    // FIX: Make sure we are reading a List
-    final installments = item['installmentsData'] as List<dynamic>? ?? [];
+    final installments = _parseInstallments(item);
 
     return Card(
       elevation: 2,

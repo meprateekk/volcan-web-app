@@ -38,7 +38,7 @@ class CacheService {
   bool _isInitialized = false;
   bool _isWebPlatform = kIsWeb;
   static const String _dbName = 'visionvolcan_cache.db';
-  static const int _dbVersion = 1;
+  static const int _dbVersion = 2;
   
   // Table names
   static const String sitesTable = 'cached_sites';
@@ -53,26 +53,69 @@ class CacheService {
   Future<void> init() async {
     if (_isWebPlatform || _database != null) return;
     
+    AppLogger.log('Initializing cache database...');
     try {
       final documentsDirectory = await getApplicationDocumentsDirectory();
       final dbPath = path.join(documentsDirectory.path, _dbName);
+      AppLogger.log('Database path: $dbPath');
+      
+      // Check if database file exists
+      final dbFile = File(dbPath);
+      if (await dbFile.exists()) {
+        AppLogger.log('Database file exists, checking version...');
+      } else {
+        AppLogger.log('Database file does not exist, will create new one');
+      }
       
       _database = await openDatabase(
         dbPath,
         version: _dbVersion,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
+        onOpen: _onOpen,
       );
       
       _isInitialized = true;
+      AppLogger.log('Cache database initialized successfully');
     } catch (e) {
       AppLogger.error('Failed to initialize cache database', error: e);
       _isInitialized = false;
     }
   }
   
+  /// Called when database is opened
+  Future<void> _onOpen(Database db) async {
+    AppLogger.log('Database opened, checking schema...');
+    try {
+      // Check if created_at column exists in all tables
+      final tablesToCheck = [sitesTable, materialPurchasesTable, contractorsTable, materialConsumedTable];
+      
+      for (final tableName in tablesToCheck) {
+        final columns = await db.rawQuery("PRAGMA table_info($tableName)");
+        final hasCreatedAt = columns.any((column) => column['name'] == 'created_at');
+        AppLogger.log('$tableName table has created_at column: $hasCreatedAt');
+        
+        if (!hasCreatedAt) {
+          AppLogger.log('created_at column missing in $tableName table, adding it...');
+          try {
+            await db.execute('ALTER TABLE $tableName ADD COLUMN created_at TEXT');
+            AppLogger.log('Added created_at to $tableName');
+          } catch (e) {
+            AppLogger.error('Failed to add created_at to $tableName', error: e);
+          }
+        }
+      }
+    } catch (e) {
+      AppLogger.error('Error checking database schema', error: e);
+    }
+  }
+  
   /// Check if cache service is available
-  bool get isAvailable => _isInitialized && !_isWebPlatform;
+  bool get isAvailable {
+    final available = _isInitialized && !_isWebPlatform;
+    AppLogger.log('Cache service availability check: _isInitialized=$_isInitialized, _isWebPlatform=$_isWebPlatform, available=$available');
+    return available;
+  }
   
   /// Create database tables
   Future<void> _onCreate(Database db, int version) async {
@@ -87,6 +130,7 @@ class CacheService {
         start_date TEXT,
         due_date TEXT,
         status TEXT,
+        created_at TEXT,
         cached_at INTEGER,
         last_sync_at INTEGER
       )
@@ -104,6 +148,7 @@ class CacheService {
         total_amount REAL,
         date_of_purchase TEXT,
         sector TEXT,
+        created_at TEXT,
         cached_at INTEGER,
         last_sync_at INTEGER
       )
@@ -120,6 +165,8 @@ class CacheService {
         paid TEXT,
         pending TEXT,
         next_payment_date TEXT,
+        status TEXT,
+        created_at TEXT,
         installmentsData TEXT,
         cached_at INTEGER,
         last_sync_at INTEGER
@@ -136,6 +183,7 @@ class CacheService {
         unit TEXT,
         date_of_consumption TEXT,
         sector TEXT,
+        created_at TEXT,
         cached_at INTEGER,
         last_sync_at INTEGER
       )
@@ -143,7 +191,28 @@ class CacheService {
   }
   
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Handle database upgrades in future versions
+    AppLogger.log('Database upgrade: oldVersion=$oldVersion, newVersion=$newVersion');
+    if (oldVersion < 2) {
+      AppLogger.log('Adding created_at columns to all tables...');
+      try {
+        await db.execute('ALTER TABLE $sitesTable ADD COLUMN created_at TEXT');
+        AppLogger.log('Added created_at to $sitesTable');
+        
+        await db.execute('ALTER TABLE $materialPurchasesTable ADD COLUMN created_at TEXT');
+        AppLogger.log('Added created_at to $materialPurchasesTable');
+        
+        await db.execute('ALTER TABLE $contractorsTable ADD COLUMN created_at TEXT');
+        AppLogger.log('Added created_at to $contractorsTable');
+        
+        await db.execute('ALTER TABLE $materialConsumedTable ADD COLUMN created_at TEXT');
+        AppLogger.log('Added created_at to $materialConsumedTable');
+        
+        AppLogger.log('Database upgrade completed successfully');
+      } catch (e) {
+        AppLogger.error('Error during database upgrade', error: e);
+        rethrow;
+      }
+    }
   }
   
   /// Check if cache is valid (not expired)
@@ -160,34 +229,62 @@ class CacheService {
   
   /// Get cached sites or fetch from server if cache is invalid
   Future<List<Map<String, dynamic>>> getSites({bool forceRefresh = false}) async {
+    AppLogger.log('getSites called with forceRefresh=$forceRefresh');
     await init();
+    
+    // Test Supabase connection
+    AppLogger.log('Testing Supabase connection...');
+    try {
+      final user = supabase.auth.currentUser;
+      AppLogger.log('Current user: ${user?.email}');
+    } catch (e) {
+      AppLogger.error('Supabase auth check failed', error: e);
+    }
     
     // If cache is not available (web platform or initialization failed), fetch directly from server
     if (!isAvailable) {
-      final response = await supabase.from('sites').select();
-      return List<Map<String, dynamic>>.from(response as List);
+      AppLogger.log('Cache not available, fetching directly from server');
+      try {
+        final response = await supabase.from('sites').select();
+        final sites = List<Map<String, dynamic>>.from(response as List);
+        AppLogger.log('Direct fetch returned ${sites.length} sites');
+        return sites;
+      } catch (e) {
+        AppLogger.error('Direct fetch from server failed', error: e);
+        rethrow;
+      }
     }
     
     if (!forceRefresh) {
-      final cachedSites = await _database!.query(
-        sitesTable,
-        orderBy: 'cached_at DESC',
-      );
-      
-      if (cachedSites.isNotEmpty && _isCacheValid(cachedSites.first['cached_at'] as int)) {
-        return cachedSites.map((site) {
-          final siteMap = Map<String, dynamic>.from(site);
-          siteMap.remove('cached_at');
-          siteMap.remove('last_sync_at');
-          return siteMap;
-        }).toList();
+      AppLogger.log('Checking cached sites...');
+      try {
+        final cachedSites = await _database!.query(
+          sitesTable,
+          orderBy: 'cached_at DESC',
+        );
+        
+        AppLogger.log('Found ${cachedSites.length} cached sites');
+        
+        if (cachedSites.isNotEmpty && _isCacheValid(cachedSites.first['cached_at'] as int)) {
+          AppLogger.log('Returning cached sites (cache is valid)');
+          return cachedSites.map((site) {
+            final siteMap = Map<String, dynamic>.from(site);
+            siteMap.remove('cached_at');
+            siteMap.remove('last_sync_at');
+            return siteMap;
+          }).toList();
+        }
+      } catch (e) {
+        AppLogger.error('Error checking cached sites', error: e);
       }
     }
     
     // Fetch from server
+    AppLogger.log('Fetching sites from server...');
     try {
       final response = await supabase.from('sites').select();
       final sites = List<Map<String, dynamic>>.from(response as List);
+      AppLogger.log('Fetched ${sites.length} sites from server');
       
       // Update cache
       final timestamp = _getCurrentTimestamp();
@@ -198,25 +295,37 @@ class CacheService {
       
       // Insert new data
       for (final site in sites) {
-        batch.insert(sitesTable, {
+        final siteData = {
           ...site,
           'cached_at': timestamp,
           'last_sync_at': timestamp,
-        });
+        };
+        // Ensure created_at field exists - if not, add current timestamp
+        if (!site.containsKey('created_at')) {
+          siteData['created_at'] = DateTime.now().toIso8601String();
+        }
+        batch.insert(sitesTable, siteData);
       }
       
       await batch.commit(noResult: true);
+      AppLogger.log('Sites cached successfully');
       return sites;
     } catch (e) {
+      AppLogger.error('Failed to fetch sites from server, returning cached data', error: e);
       // If server fails, return cached data even if expired
-      final cachedSites = await _database!.query(sitesTable);
-      if (cachedSites.isNotEmpty) {
-        return cachedSites.map((site) {
-          final siteMap = Map<String, dynamic>.from(site);
-          siteMap.remove('cached_at');
-          siteMap.remove('last_sync_at');
-          return siteMap;
-        }).toList();
+      try {
+        final cachedSites = await _database!.query(sitesTable);
+        if (cachedSites.isNotEmpty) {
+          AppLogger.log('Returning expired cached sites as fallback');
+          return cachedSites.map((site) {
+            final siteMap = Map<String, dynamic>.from(site);
+            siteMap.remove('cached_at');
+            siteMap.remove('last_sync_at');
+            return siteMap;
+          }).toList();
+        }
+      } catch (cacheError) {
+        AppLogger.error('Failed to get cached sites as fallback', error: cacheError);
       }
       rethrow;
     }
@@ -238,19 +347,29 @@ class CacheService {
       
       // Add to cache
       final timestamp = _getCurrentTimestamp();
-      await _database!.insert(sitesTable, {
+      final siteData = {
         ...site,
         'cached_at': timestamp,
         'last_sync_at': timestamp,
-      });
+      };
+      // Remove created_at if it doesn't exist in the site data to avoid errors
+      if (!site.containsKey('created_at')) {
+        siteData['created_at'] = DateTime.now().toIso8601String();
+      }
+      await _database!.insert(sitesTable, siteData);
     } catch (e) {
       // If server fails, add to cache with sync pending flag
       final timestamp = _getCurrentTimestamp();
-      await _database!.insert(sitesTable, {
+      final siteData = {
         ...site,
         'cached_at': timestamp,
         'last_sync_at': 0, // 0 indicates sync pending
-      });
+      };
+      // Remove created_at if it doesn't exist in the site data to avoid errors
+      if (!site.containsKey('created_at')) {
+        siteData['created_at'] = DateTime.now().toIso8601String();
+      }
+      await _database!.insert(sitesTable, siteData);
       rethrow;
     }
   }
@@ -399,11 +518,16 @@ class CacheService {
       
       // Insert new data
       for (final purchase in purchases) {
-        batch.insert(materialPurchasesTable, {
+        final purchaseData = {
           ...purchase,
           'cached_at': timestamp,
           'last_sync_at': timestamp,
-        });
+        };
+        // Ensure created_at field exists - if not, add current timestamp
+        if (!purchase.containsKey('created_at')) {
+          purchaseData['created_at'] = DateTime.now().toIso8601String();
+        }
+        batch.insert(materialPurchasesTable, purchaseData);
       }
       
       await batch.commit(noResult: true);
@@ -443,19 +567,29 @@ class CacheService {
       
       // Add to cache
       final timestamp = _getCurrentTimestamp();
-      await _database!.insert(materialPurchasesTable, {
+      final purchaseData = {
         ...purchase,
         'cached_at': timestamp,
         'last_sync_at': timestamp,
-      });
+      };
+      // Ensure created_at field exists - if not, add current timestamp
+      if (!purchase.containsKey('created_at')) {
+        purchaseData['created_at'] = DateTime.now().toIso8601String();
+      }
+      await _database!.insert(materialPurchasesTable, purchaseData);
     } catch (e) {
       // If server fails, add to cache with sync pending flag
       final timestamp = _getCurrentTimestamp();
-      await _database!.insert(materialPurchasesTable, {
+      final purchaseData = {
         ...purchase,
         'cached_at': timestamp,
         'last_sync_at': 0, // 0 indicates sync pending
-      });
+      };
+      // Ensure created_at field exists - if not, add current timestamp
+      if (!purchase.containsKey('created_at')) {
+        purchaseData['created_at'] = DateTime.now().toIso8601String();
+      }
+      await _database!.insert(materialPurchasesTable, purchaseData);
       rethrow;
     }
   }
@@ -488,6 +622,7 @@ class CacheService {
           final contractorMap = Map<String, dynamic>.from(contractor);
           contractorMap.remove('cached_at');
           contractorMap.remove('last_sync_at');
+          _hydrateContractorInstallments(contractorMap);
           return contractorMap;
         }).toList();
       }
@@ -514,11 +649,12 @@ class CacheService {
       
       // Insert new data
       for (final contractor in contractors) {
-        batch.insert(contractorsTable, {
-          ...contractor,
-          'cached_at': timestamp,
-          'last_sync_at': timestamp,
-        });
+        final contractorData = _normalizeContractorForCache(
+          contractor,
+          cachedAt: timestamp,
+          lastSyncAt: timestamp,
+        );
+        batch.insert(contractorsTable, contractorData);
       }
       
       await batch.commit(noResult: true);
@@ -535,11 +671,41 @@ class CacheService {
           final contractorMap = Map<String, dynamic>.from(contractor);
           contractorMap.remove('cached_at');
           contractorMap.remove('last_sync_at');
+          _hydrateContractorInstallments(contractorMap);
           return contractorMap;
         }).toList();
       }
       rethrow;
     }
+  }
+
+  void _hydrateContractorInstallments(Map<String, dynamic> contractorMap) {
+    final raw = contractorMap['installmentsData'];
+    if (raw == null) {
+      contractorMap['installments'] = <dynamic>[];
+      return;
+    }
+
+    if (raw is List) {
+      contractorMap['installments'] = raw;
+      return;
+    }
+
+    if (raw is String) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is List) {
+          contractorMap['installments'] = decoded;
+        } else {
+          contractorMap['installments'] = <dynamic>[];
+        }
+      } catch (_) {
+        contractorMap['installments'] = <dynamic>[];
+      }
+      return;
+    }
+
+    contractorMap['installments'] = <dynamic>[];
   }
   
   /// Add contractor to both cache and server
@@ -558,20 +724,108 @@ class CacheService {
       
       // Add to cache
       final timestamp = _getCurrentTimestamp();
-      await _database!.insert(contractorsTable, {
-        ...contractor,
-        'cached_at': timestamp,
-        'last_sync_at': timestamp,
-      });
+      final contractorData = _normalizeContractorForCache(
+        contractor,
+        cachedAt: timestamp,
+        lastSyncAt: timestamp,
+      );
+      await _database!.insert(contractorsTable, contractorData);
     } catch (e) {
       // If server fails, add to cache with sync pending flag
       final timestamp = _getCurrentTimestamp();
-      await _database!.insert(contractorsTable, {
-        ...contractor,
-        'cached_at': timestamp,
-        'last_sync_at': 0, // 0 indicates sync pending
-      });
+      final contractorData = _normalizeContractorForCache(
+        contractor,
+        cachedAt: timestamp,
+        lastSyncAt: 0,
+      );
+      await _database!.insert(contractorsTable, contractorData);
       rethrow;
+    }
+  }
+
+  Map<String, dynamic> _normalizeContractorForCache(
+    Map<String, dynamic> contractor, {
+    required int cachedAt,
+    required int lastSyncAt,
+  }) {
+    final contractorData = <String, dynamic>{
+      ...contractor,
+      'cached_at': cachedAt,
+      'last_sync_at': lastSyncAt,
+    };
+
+    if (!contractorData.containsKey('created_at')) {
+      contractorData['created_at'] = DateTime.now().toIso8601String();
+    }
+
+    // Always remove `installments` key so SQLite never tries to write it.
+    // Store it into installmentsData as JSON (string), regardless of whether
+    // the incoming value is a List, a JSON String, null, etc.
+    if (contractorData.containsKey('installments')) {
+      final installments = contractorData['installments'];
+      contractorData.remove('installments');
+
+      if (installments == null) {
+        contractorData['installmentsData'] = jsonEncode([]);
+      } else if (installments is String) {
+        contractorData['installmentsData'] = installments;
+      } else if (installments is List) {
+        contractorData['installmentsData'] = jsonEncode(installments);
+      } else {
+        contractorData['installmentsData'] = jsonEncode([]);
+      }
+    } else if (!contractorData.containsKey('installmentsData')) {
+      contractorData['installmentsData'] = jsonEncode([]);
+    }
+
+    return contractorData;
+  }
+
+  Map<String, dynamic> _normalizeMaterialConsumedForCache(
+    Map<String, dynamic> item, {
+    required int cachedAt,
+    required int lastSyncAt,
+  }) {
+    final itemData = <String, dynamic>{
+      ...item,
+      'cached_at': cachedAt,
+      'last_sync_at': lastSyncAt,
+    };
+
+    if (!itemData.containsKey('created_at')) {
+      itemData['created_at'] = DateTime.now().toIso8601String();
+    }
+
+    // Supabase/mobile UI may use: material, quantity, date_used, floor
+    // SQLite schema uses: material_name, quantity_used, date_of_consumption
+    if (itemData.containsKey('material') && !itemData.containsKey('material_name')) {
+      itemData['material_name'] = itemData['material'];
+    }
+    if (itemData.containsKey('quantity') && !itemData.containsKey('quantity_used')) {
+      itemData['quantity_used'] = itemData['quantity'];
+    }
+    if (itemData.containsKey('date_used') && !itemData.containsKey('date_of_consumption')) {
+      itemData['date_of_consumption'] = itemData['date_used'];
+    }
+
+    // Remove keys that are not columns in cached_material_consumed
+    itemData.remove('material');
+    itemData.remove('quantity');
+    itemData.remove('date_used');
+    itemData.remove('floor');
+
+    return itemData;
+  }
+
+  void _hydrateMaterialConsumedForUi(Map<String, dynamic> consumedMap) {
+    if (!consumedMap.containsKey('material') && consumedMap.containsKey('material_name')) {
+      consumedMap['material'] = consumedMap['material_name'];
+    }
+    if (!consumedMap.containsKey('quantity') && consumedMap.containsKey('quantity_used')) {
+      consumedMap['quantity'] = consumedMap['quantity_used'];
+    }
+    if (!consumedMap.containsKey('date_used') && consumedMap.containsKey('date_of_consumption')) {
+      consumedMap['date_used'] = consumedMap['date_of_consumption'];
     }
   }
   
@@ -603,6 +857,7 @@ class CacheService {
           final consumedMap = Map<String, dynamic>.from(consumed);
           consumedMap.remove('cached_at');
           consumedMap.remove('last_sync_at');
+          _hydrateMaterialConsumedForUi(consumedMap);
           return consumedMap;
         }).toList();
       }
@@ -629,11 +884,12 @@ class CacheService {
       
       // Insert new data
       for (final item in consumed) {
-        batch.insert(materialConsumedTable, {
-          ...item,
-          'cached_at': timestamp,
-          'last_sync_at': timestamp,
-        });
+        final itemData = _normalizeMaterialConsumedForCache(
+          item,
+          cachedAt: timestamp,
+          lastSyncAt: timestamp,
+        );
+        batch.insert(materialConsumedTable, itemData);
       }
       
       await batch.commit(noResult: true);
@@ -650,6 +906,7 @@ class CacheService {
           final consumedMap = Map<String, dynamic>.from(consumed);
           consumedMap.remove('cached_at');
           consumedMap.remove('last_sync_at');
+          _hydrateMaterialConsumedForUi(consumedMap);
           return consumedMap;
         }).toList();
       }
@@ -673,19 +930,21 @@ class CacheService {
       
       // Add to cache
       final timestamp = _getCurrentTimestamp();
-      await _database!.insert(materialConsumedTable, {
-        ...item,
-        'cached_at': timestamp,
-        'last_sync_at': timestamp,
-      });
+      final itemData = _normalizeMaterialConsumedForCache(
+        item,
+        cachedAt: timestamp,
+        lastSyncAt: timestamp,
+      );
+      await _database!.insert(materialConsumedTable, itemData);
     } catch (e) {
       // If server fails, add to cache with sync pending flag
       final timestamp = _getCurrentTimestamp();
-      await _database!.insert(materialConsumedTable, {
-        ...item,
-        'cached_at': timestamp,
-        'last_sync_at': 0, // 0 indicates sync pending
-      });
+      final itemData = _normalizeMaterialConsumedForCache(
+        item,
+        cachedAt: timestamp,
+        lastSyncAt: 0,
+      );
+      await _database!.insert(materialConsumedTable, itemData);
       rethrow;
     }
   }
@@ -699,9 +958,43 @@ class CacheService {
       return;
     }
     
-    await getMaterialPurchasesForSite(siteId, forceRefresh: true);
-    await getContractorsForSite(siteId, forceRefresh: true);
-    await getMaterialConsumedForSite(siteId, forceRefresh: true);
+    try {
+      await getMaterialPurchasesForSite(siteId, forceRefresh: true);
+      await getContractorsForSite(siteId, forceRefresh: true);
+      await getMaterialConsumedForSite(siteId, forceRefresh: true);
+    } catch (e) {
+      AppLogger.error('Failed to refresh site data', error: e);
+      rethrow;
+    }
+  }
+  
+  /// Reset the entire database (for debugging purposes)
+  Future<void> resetDatabase() async {
+    if (_isWebPlatform) return;
+    
+    AppLogger.log('Resetting database...');
+    try {
+      if (_database != null) {
+        await _database!.close();
+        _database = null;
+      }
+      
+      final documentsDirectory = await getApplicationDocumentsDirectory();
+      final dbPath = path.join(documentsDirectory.path, _dbName);
+      final dbFile = File(dbPath);
+      
+      if (await dbFile.exists()) {
+        await dbFile.delete();
+        AppLogger.log('Database file deleted');
+      }
+      
+      _isInitialized = false;
+      await init();
+      AppLogger.log('Database reset complete');
+    } catch (e) {
+      AppLogger.error('Failed to reset database', error: e);
+      rethrow;
+    }
   }
   
   /// Clear all cached data
