@@ -40,6 +40,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _loadExpenseData();
   }
 
+  int _siteId() {
+    final rawId = widget.siteData['id'];
+    if (rawId is int) return rawId;
+    if (rawId is num) return rawId.toInt();
+    if (rawId is String) return int.tryParse(rawId) ?? 0;
+    return 0;
+  }
+
   List<dynamic> _parseInstallments(Map<String, dynamic> item) {
     final raw = item['installments'] ?? item['installmentsData'];
     if (raw == null) return [];
@@ -57,9 +65,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   // --- *** STEP 2: REBUILD _loadExpenseData TO USE NEW LOGIC *** ---
   Future<void> _loadExpenseData() async {
+    final siteId = _siteId();
     // 1. Fetch from the CORRECT tables
-    final purchases = await InventoryService.instance.getAllPurchases(widget.siteData['id']);
-    final contractors = await ExpenseService.instance.getContractorsForSite(widget.siteData['id']);
+    final purchases = await InventoryService.instance.getAllPurchases(siteId);
+    final contractors = await ExpenseService.instance.getContractorsForSite(siteId);
 
     // This is our "grouper" map for materials
     Map<String, Map<String, dynamic>> groupedMaterials = {};
@@ -450,7 +459,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               
               // Force refresh cache for this site (if available)
               try {
-                await CacheService.instance.refreshSiteData(widget.siteData['id']);
+                await CacheService.instance.refreshSiteData(_siteId());
               } catch (e) {
                 // Cache refresh failed, but continue with data reload
                 print('Cache refresh failed: $e');
@@ -1075,82 +1084,111 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _showDashboardInstallmentsDialog(Map<String, dynamic> item) {
-    final allInstallments = item['installmentsData'] as List<dynamic>? ?? [];
-    final paidInstallments = allInstallments.where((inst) => inst['status'] == 'paid').toList();
+    try {
+      final allInstallmentsRaw = item['installmentsData'] ?? item['installments'];
+      List<dynamic> allInstallments = [];
+      if (allInstallmentsRaw is List) {
+        allInstallments = allInstallmentsRaw;
+      } else if (allInstallmentsRaw is String) {
+        try {
+          allInstallments = jsonDecode(allInstallmentsRaw) as List<dynamic>? ?? [];
+        } catch (_) {
+          allInstallments = [];
+        }
+      }
 
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('${item['name']} - Paid Installments'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (paidInstallments.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: Text(
-                      'No paid installments yet',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  )
-                else
-                  Flexible(
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: paidInstallments.length,
-                      itemBuilder: (context, index) {
-                        final installment = paidInstallments[index];
-                        final amount = double.tryParse(installment['amount']?.toString() ?? '0') ?? 0;
+      final paidInstallments = allInstallments.where((inst) => inst['status'] == 'paid').toList();
 
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          color: Colors.green.shade50,
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: Colors.green,
-                              child: Icon(
-                                Icons.check,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                            ),
-                            title: Text(
-                              _formatCurrency(amount),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                            ),
-                            subtitle: Row(
-                              children: [
-                                Icon(Icons.calendar_today, size: 12, color: Colors.grey.shade600),
-                                const SizedBox(width: 4),
-                                Text(
-                                  installment['date'] ?? '',
-                                  style: const TextStyle(fontSize: 13),
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text('${item['name'] ?? 'Contractor'} - Paid Installments'),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (paidInstallments.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: Text(
+                        'No paid installments yet',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    )
+                  else
+                    Flexible(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: paidInstallments.length,
+                        itemBuilder: (context, index) {
+                          final installment = paidInstallments[index];
+                          final amount = double.tryParse(installment['amount']?.toString() ?? '0') ?? 0;
+
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            color: Colors.green.shade50,
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: Colors.green,
+                                child: Icon(
+                                  Icons.check,
+                                  color: Colors.white,
+                                  size: 20,
                                 ),
-                              ],
+                              ),
+                              title: Text(
+                                _formatCurrency(amount),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              subtitle: Row(
+                                children: [
+                                  Icon(Icons.calendar_today, size: 12, color: Colors.grey.shade600),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    installment['date']?.toString() ?? '',
+                                    style: const TextStyle(fontSize: 13),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        );
-                      },
+                          );
+                        },
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
+          );
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Error'),
+            content: Text('Unable to load installments: ${e.toString()}'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
         );
-      },
-    );
+      }
+    }
   }
 
   // --- *** STEP 8: ADD THE NEW DIALOG FOR PURCHASE LOGS *** ---

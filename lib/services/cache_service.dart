@@ -38,7 +38,7 @@ class CacheService {
   bool _isInitialized = false;
   bool _isWebPlatform = kIsWeb;
   static const String _dbName = 'visionvolcan_cache.db';
-  static const int _dbVersion = 2;
+  static const int _dbVersion = 3;
   
   // Table names
   static const String sitesTable = 'cached_sites';
@@ -103,6 +103,21 @@ class CacheService {
           } catch (e) {
             AppLogger.error('Failed to add created_at to $tableName', error: e);
           }
+        }
+      }
+
+      // Check if floor column exists in material_consumed table
+      final consumedColumns = await db.rawQuery("PRAGMA table_info($materialConsumedTable)");
+      final hasFloor = consumedColumns.any((column) => column['name'] == 'floor');
+      AppLogger.log('$materialConsumedTable table has floor column: $hasFloor');
+      
+      if (!hasFloor) {
+        AppLogger.log('floor column missing in $materialConsumedTable table, adding it...');
+        try {
+          await db.execute('ALTER TABLE $materialConsumedTable ADD COLUMN floor TEXT');
+          AppLogger.log('Added floor to $materialConsumedTable');
+        } catch (e) {
+          AppLogger.error('Failed to add floor to $materialConsumedTable', error: e);
         }
       }
     } catch (e) {
@@ -183,6 +198,7 @@ class CacheService {
         unit TEXT,
         date_of_consumption TEXT,
         sector TEXT,
+        floor TEXT,
         created_at TEXT,
         cached_at INTEGER,
         last_sync_at INTEGER
@@ -211,6 +227,15 @@ class CacheService {
       } catch (e) {
         AppLogger.error('Error during database upgrade', error: e);
         rethrow;
+      }
+    }
+    if (oldVersion < 3) {
+      AppLogger.log('Adding floor column to $materialConsumedTable...');
+      try {
+        await db.execute('ALTER TABLE $materialConsumedTable ADD COLUMN floor TEXT');
+        AppLogger.log('Added floor to $materialConsumedTable');
+      } catch (e) {
+        AppLogger.error('Error adding floor column', error: e);
       }
     }
   }
@@ -812,7 +837,7 @@ class CacheService {
     itemData.remove('material');
     itemData.remove('quantity');
     itemData.remove('date_used');
-    itemData.remove('floor');
+    // Keep 'floor' for UI
 
     return itemData;
   }
@@ -827,6 +852,7 @@ class CacheService {
     if (!consumedMap.containsKey('date_used') && consumedMap.containsKey('date_of_consumption')) {
       consumedMap['date_used'] = consumedMap['date_of_consumption'];
     }
+    // Ensure floor is present (no rename needed)
   }
   
   // ==================== MATERIAL CONSUMED ====================

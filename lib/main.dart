@@ -20,6 +20,7 @@ Future<void> main() async {
     } catch (e) {
       print('Cache service initialization failed: $e');
       // Continue without cache if initialization fails
+      // Optionally disable cache usage globally
     }
   }
 
