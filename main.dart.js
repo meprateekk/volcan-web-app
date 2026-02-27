@@ -105319,7 +105319,8 @@ r[1]=r[1]+s[1]
 r[0]=r[0]+s[0]}}
 A.Sl.prototype={
 I(a){return new A.En(this.afB(),!1,null)},
-afB(){if($.dp().gjX().c!=null)return B.jE
+afB(){var s=$.dp().gjX().c
+if((s==null?null:s.r)!=null)return B.jE
 else return B.mw}}
 A.Cr.prototype={
 a8(){var s=t.H7
